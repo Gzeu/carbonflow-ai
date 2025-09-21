@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "name": "carbonflow-ai",
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/webhooks",
+      "dest": "/api/webhooks.js"
+    },
+    {
+      "src": "/health",
+      "dest": "/api/webhooks.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "WEBHOOK_SECRET": "@webhook-secret",
+    "GITHUB_APP_ID": "@github-app-id",
+    "GITHUB_PRIVATE_KEY": "@github-private-key"
+  },
+  "functions": {
+    "api/webhooks.js": {
+      "maxDuration": 30
+    }
+  }
+}

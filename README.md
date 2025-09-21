@@ -1,208 +1,184 @@
-# CarbonFlow AI 🌱
+# 🌱 CarbonFlow AI - Carbon Footprint Tracker
 
-> **Revolutionary AI-powered decentralized carbon credit trading platform combining machine learning verification with blockchain automation**
+> Revolutionary AI-powered decentralized carbon credit trading platform with ML verification and blockchain automation
 
+[![GitHub App](https://img.shields.io/badge/GitHub-App-blue)](https://github.com/apps/carbonflow-ai-tracker)
+[![Vercel](https://img.shields.io/badge/Deployed-Vercel-black)](https://carbonflow-ai.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MultiversX](https://img.shields.io/badge/Blockchain-MultiversX-blue)](https://multiversx.com/)
-[![AI Powered](https://img.shields.io/badge/AI-Powered-green)](https://www.tensorflow.org/)
-[![IoT Ready](https://img.shields.io/badge/IoT-Ready-orange)](https://www.iot.com/)
 
-## 🚀 Vision
+## ✨ Features
 
-CarbonFlow AI addresses the **$1 trillion carbon credit market** by automating verification processes that currently take months, reducing them to **minutes** using AI-powered satellite imagery analysis and real-time IoT monitoring.
+### 🚀 GitHub Integration
+- **Real-time Carbon Tracking** - Monitors every commit for environmental impact
+- **AI-Powered Analysis** - Machine learning algorithms assess code efficiency
+- **Automated Reporting** - Generates sustainability reports for repositories
+- **Smart Recommendations** - Suggests eco-friendly coding practices
+- **CI/CD Monitoring** - Tracks energy consumption of workflows
 
-## ✨ Revolutionary Features
+### 🌍 Carbon Footprint Analysis
+- **Code Impact Assessment** - Calculates energy consumption per commit
+- **Performance Optimization** - Identifies inefficient algorithms
+- **Green Coding Metrics** - Measures sustainability scores
+- **Carbon Credits Integration** - Rewards eco-friendly development
 
-### 🤖 AI Carbon Verification Engine
-- **Satellite Analysis**: CNN models analyze satellite imagery in real-time
-- **Fraud Detection**: ML algorithms identify fake carbon projects with >95% accuracy
-- **Predictive Analytics**: LSTM networks forecast CO2 capture potential
-- **Automated Verification**: Reduces verification time from months to minutes
+## 🛠️ GitHub App Installation
 
-### ⛓️ MultiversX Blockchain Integration
-- **Smart Contracts**: Rust-based contracts for automated carbon credit minting
-- **NFT Carbon Credits**: Each credit becomes a tradable digital asset
-- **DAO Governance**: Community-driven platform decisions
-- **Cross-chain Compatibility**: Bridge to other major blockchains
+### Install CarbonFlow AI Tracker
 
-### 🌐 Real-time IoT Monitoring
-- **Environmental Sensors**: CO2, temperature, humidity, soil moisture monitoring
-- **LoRaWAN Network**: Long-range, low-power sensor communication
-- **Automated Alerts**: Real-time anomaly detection and notifications
-- **Data Validation**: Multiple sensor correlation for accuracy
+1. **Visit the GitHub App**: [CarbonFlow AI Tracker](https://github.com/apps/carbonflow-ai-tracker)
+2. **Click "Install"** on your repositories
+3. **Grant permissions** for carbon tracking
+4. **Start coding sustainably!** 🌱
 
-### 📊 Trading & Analytics Platform
-- **Real-time Market**: Live carbon credit trading with price discovery
-- **Portfolio Management**: Track investments and environmental impact
-- **Yield Farming**: Stake tokens for validator rewards
-- **Impact Metrics**: Transparent CO2 offset tracking
+### Supported Events
 
-## 🏗️ Architecture
+- 📦 **Push** - Analyzes commits for carbon impact
+- 🔀 **Pull Request** - Reviews changes for sustainability
+- 📝 **Issues** - Manages carbon-related tasks
+- ⚙️ **Workflow Run** - Monitors CI/CD energy usage
+- 🏦 **Release** - Tracks deployment carbon footprint
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Frontend UI   │    │   Backend API    │    │  AI Engine     │
-│                 │    │                  │    │                 │
-│ • React 18      │◄──►│ • Node.js/Rust   │◄──►│ • TensorFlow    │
-│ • TypeScript    │    │ • PostgreSQL     │    │ • Python        │
-│ • Tailwind CSS  │    │ • Redis Cache    │    │ • FastAPI       │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-        ▲                        ▲                        ▲
-        │                        │                        │
-        ▼                        ▼                        ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ MultiversX      │    │   IoT Network    │    │ Satellite APIs  │
-│ Blockchain      │    │                  │    │                 │
-│                 │    │ • LoRaWAN        │    │ • Google Earth  │
-│ • Smart Contract│    │ • MQTT Broker    │    │ • NASA APIs     │
-│ • ESDT Tokens   │    │ • Sensors        │    │ • ESA Data      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+## 📊 Carbon Impact Levels
 
-## 🛠️ Tech Stack
+### 🟢 Green (Low Impact)
+- Energy consumption < 0.5 kWh
+- Efficient algorithms and optimized code
+- Sustainable development practices
 
-### Frontend
-- **React 18** - Modern UI framework with hooks and suspense
-- **TypeScript** - Type-safe development
-- **Vite** - Lightning-fast build tool
-- **Tailwind CSS** - Utility-first styling
-- **Zustand** - Lightweight state management
-- **React Query** - Data fetching and caching
+### 🟡 Yellow (Moderate Impact)
+- Energy consumption 0.5-1.0 kWh
+- Monitor performance metrics
+- Consider optimization opportunities
 
-### Backend
-- **Node.js/Express** - Primary API server
-- **Rust** - High-performance services
-- **PostgreSQL** - Primary database
-- **Redis** - Caching and session management
-- **Apache Kafka** - Real-time data streaming
-- **Docker** - Containerization
-
-### AI/ML
-- **TensorFlow** - Deep learning models
-- **PyTorch** - Research and prototyping
-- **OpenCV** - Computer vision processing
-- **FastAPI** - ML model serving
-- **Scikit-learn** - Traditional ML algorithms
-
-### Blockchain
-- **MultiversX** - Main blockchain platform
-- **Rust** - Smart contract development
-- **ESDT Tokens** - Carbon credit tokenization
-- **Web3 Integration** - Wallet connectivity
-
-### IoT
-- **LoRaWAN** - Long-range sensor communication
-- **MQTT** - Message broker protocol
-- **InfluxDB** - Time-series sensor data
-- **Grafana** - Real-time monitoring dashboards
-
-## 📋 Development Roadmap
-
-### Phase 1: MVP Development (Months 1-3)
-- [x] Project setup and architecture
-- [x] Issue tracking and task management
-- [ ] AI verification engine core
-- [ ] Basic smart contracts
-- [ ] Frontend marketplace UI
-- [ ] MVP deployment on testnet
-
-### Phase 2: Advanced Features (Months 4-6)
-- [ ] IoT sensor integration
-- [ ] Advanced AI models
-- [ ] DAO governance system
-- [ ] Mobile application
-- [ ] Mainnet deployment
-
-### Phase 3: Scale & Partnerships (Months 7-12)
-- [ ] Enterprise partnerships
-- [ ] Cross-chain integration
-- [ ] Global sensor network
-- [ ] Advanced analytics
-- [ ] Regulatory compliance
-
-## 🎯 Market Opportunity
-
-- **Market Size**: $1 trillion carbon credit market by 2030
-- **Problem**: Manual verification takes months and is fraud-prone
-- **Solution**: AI-powered verification in minutes with blockchain transparency
-- **Revenue**: Transaction fees, verification services, API access, staking rewards
-
-## 💰 Business Model
-
-- **0.5% Trading Fees** on all carbon credit transactions
-- **$50 per AI Verification** for carbon project validation
-- **API Subscriptions** for developers and enterprises
-- **Staking Rewards** from validator network participation
-- **Premium Features** for institutional users
-
-## 📋 Current Development Tasks
-Check our [GitHub Issues](https://github.com/Gzeu/carbonflow-ai/issues) for current development tasks:
-
-- [🚀 MVP Development - Phase 1](https://github.com/Gzeu/carbonflow-ai/issues/1)
-- [🤖 AI Carbon Verification Engine](https://github.com/Gzeu/carbonflow-ai/issues/2)
-- [⛓️ MultiversX Smart Contracts](https://github.com/Gzeu/carbonflow-ai/issues/3)
-- [🌍 Frontend Development](https://github.com/Gzeu/carbonflow-ai/issues/4)
-- [🌐 IoT Sensor Integration](https://github.com/Gzeu/carbonflow-ai/issues/5)
+### 🔴 Red (High Impact)
+- Energy consumption > 1.0 kWh
+- Requires immediate optimization
+- Algorithm review recommended
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Node.js 18+
-- Python 3.9+
-- Docker & Docker Compose
-- MultiversX wallet
+### For Repository Owners
 
-### Installation
+1. **Install the GitHub App** on your repository
+2. **Push code** and watch for carbon analysis
+3. **Review recommendations** in pull request comments
+4. **Track progress** with sustainability labels
+
+### For Developers
 
 ```bash
-# Clone the repository
+# Clone the project
 git clone https://github.com/Gzeu/carbonflow-ai.git
 cd carbonflow-ai
 
 # Install dependencies
 npm install
-pip install -r requirements.txt
 
-# Setup environment
-cp .env.example .env
-# Edit .env with your configurations
-
-# Start development environment
-docker-compose up -d
-npm run dev
+# Deploy to Vercel
+npm run deploy
 ```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# GitHub App Configuration
+GITHUB_APP_ID=1989339
+WEBHOOK_SECRET=your_webhook_secret
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+
+# Optional: Custom thresholds
+CARBON_THRESHOLD_YELLOW=0.5
+CARBON_THRESHOLD_RED=1.0
+```
+
+## 📡 Webhook Events
+
+### Push Event
+```json
+{
+  "event": "push",
+  "analysis": {
+    "energyConsumption": 0.0234,
+    "carbonEmission": 0.0094,
+    "carbonScore": "green",
+    "recommendations": [
+      "🟢 Low carbon impact - Great work!",
+      "♻️ Keep following sustainable coding practices"
+    ]
+  }
+}
+```
+
+### Pull Request Event
+```json
+{
+  "event": "pull_request",
+  "action": "comment_and_label",
+  "comment": "🟢 Low Carbon Impact - Sustainable code changes!",
+  "labels": ["carbon-green", "sustainability-check"]
+}
+```
+
+## 🎆 Advanced Features
+
+### AI-Powered Recommendations
+- **Algorithm Optimization** - Suggests more efficient implementations
+- **Database Query Analysis** - Reviews SQL performance impact
+- **Caching Strategies** - Recommends computational overhead reduction
+- **Green Hosting** - Advises on sustainable infrastructure
+
+### Blockchain Integration
+- **Carbon Credits** - Automatic generation for green commits
+- **Smart Contracts** - Verification and trading automation
+- **Decentralized Tracking** - Immutable carbon footprint records
+- **Token Rewards** - Incentivizes sustainable development
+
+## 📊 Analytics Dashboard
+
+### Repository Metrics
+- Total carbon footprint over time
+- Energy consumption trends
+- Developer sustainability scores
+- CI/CD efficiency metrics
+
+### Team Performance
+- Green coding leaderboards
+- Sustainability achievements
+- Carbon reduction goals
+- Eco-friendly milestones
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+We welcome contributions to make development more sustainable!
 
-### Development Workflow
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/carbon-tracking`
+3. **Commit changes**: `git commit -m 'Add carbon tracking feature'`
+4. **Push to branch**: `git push origin feature/carbon-tracking`
+5. **Submit a Pull Request**
 
-## 🔒 Security
+## 🔗 Resources
 
-Security is our top priority. Please report security vulnerabilities to security@carbonflow.ai.
-
-- Smart contract audits
-- IoT device encryption
-- API rate limiting
-- Multi-signature wallets
-- Regular security assessments
+- [GitHub Apps Documentation](https://docs.github.com/en/apps)
+- [Carbon Footprint in Software](https://www.green-software.foundation/)
+- [Sustainable Software Development](https://principles.green/)
+- [Vercel Deployment Guide](https://vercel.com/docs)
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🌟 Support
+## 🎯 About the Creator
 
-- ⭐ Star this repository if you find it useful
-- 🐛 [Report bugs](https://github.com/Gzeu/carbonflow-ai/issues/new?template=bug_report.md)
-- 💡 [Request features](https://github.com/Gzeu/carbonflow-ai/issues/new?template=feature_request.md)
+**George Pricop** - GitHub Developer Program Member
+- GitHub: [@Gzeu](https://github.com/Gzeu)
+- Blockchain Developer & AI Automation Specialist
+- Building sustainable technology solutions
 
 ---
 
-**Built with ❤️ for a sustainable future** 🌍
+⭐ **Star this repository to support sustainable software development!**
+
+**Made with 🌱 for a greener future**

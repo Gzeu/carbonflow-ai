@@ -1,59 +1,32 @@
 {
   "name": "carbonflow-ai",
-  "version": "0.1.0",
-  "description": "Revolutionary AI-powered decentralized carbon credit trading platform",
-  "main": "index.js",
+  "version": "1.0.0",
+  "description": "Revolutionary AI-powered decentralized carbon credit trading platform with ML verification and blockchain automation",
+  "main": "api/webhooks.js",
   "scripts": {
-    "dev": "npm-run-all --parallel dev:*",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:ai": "cd ai-engine && uvicorn main:app --reload --port 8001",
-    "build": "npm-run-all build:*",
-    "build:frontend": "cd frontend && npm run build",
-    "build:backend": "cd backend && npm run build",
-    "test": "npm-run-all test:*",
-    "test:frontend": "cd frontend && npm run test",
-    "test:backend": "cd backend && npm run test",
-    "test:ai": "cd ai-engine && python -m pytest",
-    "start": "docker-compose up",
-    "start:prod": "docker-compose -f docker-compose.prod.yml up",
-    "setup": "npm-run-all setup:*",
-    "setup:frontend": "cd frontend && npm install",
-    "setup:backend": "cd backend && npm install",
-    "setup:ai": "cd ai-engine && pip install -r requirements.txt"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Gzeu/carbonflow-ai.git"
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "start": "vercel start",
+    "deploy": "vercel --prod"
   },
   "keywords": [
     "carbon-credits",
     "blockchain",
     "ai",
-    "multiversx",
-    "iot",
-    "environmental",
     "sustainability",
-    "trading",
-    "verification",
-    "satellite"
+    "github-app",
+    "webhook",
+    "carbon-tracking"
   ],
-  "author": {
-    "name": "George Pricop",
-    "email": "pricopgeorge@gmail.com",
-    "url": "https://github.com/Gzeu"
-  },
+  "author": "George Pricop <pricopgeorge@gmail.com>",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/Gzeu/carbonflow-ai/issues"
+  "dependencies": {
+    "crypto": "^1.0.1"
   },
-  "homepage": "https://github.com/Gzeu/carbonflow-ai#readme",
   "devDependencies": {
-    "npm-run-all": "^4.1.5",
-    "concurrently": "^8.2.2"
+    "@vercel/node": "^3.0.0"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "node": ">=18.0.0"
   }
 }

@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_URL=http://localhost:4000
+      - REACT_APP_AI_API_URL=http://localhost:8001
+      - REACT_APP_MULTIVERSX_NETWORK=testnet
+    depends_on:
+      - backend
+      - ai-engine
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://carbonflow:password@postgres:5432/carbonflow_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key
+      - AI_ENGINE_URL=http://ai-engine:8001
+    depends_on:
+      - postgres
+      - redis
+
+  # AI Engine (Python FastAPI)
+  ai-engine:
+    build:
+      context: ./ai-engine
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./ai-engine:/app
+      - ./ai-engine/models:/app/models
+    environment:
+      - ENVIRONMENT=development
+      - MODEL_PATH=/app/models
+      - SATELLITE_API_KEY=your-satellite-api-key
+      - DATABASE_URL=postgresql://carbonflow:password@postgres:5432/carbonflow_db
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=carbonflow_db
+      - POSTGRES_USER=carbonflow
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Apache Kafka pentru IoT streaming
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+
+  # Zookeeper pentru Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # InfluxDB pentru time-series IoT data
+  influxdb:
+    image: influxdb:2.7-alpine
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=carbonflow_iot
+      - INFLUXDB_USER=carbonflow
+      - INFLUXDB_USER_PASSWORD=password
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+
+  # MQTT Broker pentru IoT communication
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./iot/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+
+volumes:
+  postgres_data:
+  redis_data:
+  influxdb_data:
+  mosquitto_data:
+  mosquitto_logs:
+
+networks:
+  default:
+    name: carbonflow-network

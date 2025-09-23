@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌱 CarbonFlow AI - Carbon Credit Trading Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 800px;
+            padding: 2rem;
+        }
+        
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00ff88, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .feature {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 2rem 0;
+        }
+        
+        .api-test {
+            margin-top: 2rem;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #00ff88, #00ccff);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .response {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            text-align: left;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🌱</div>
+        <h1>CarbonFlow AI</h1>
+        <p class="subtitle">Revolutionary AI-powered decentralized carbon credit trading platform</p>
+        
+        <div class="status">
+            <h3>🚀 System Status</h3>
+            <p id="status-text">Loading...</p>
+            <div id="deployment-info"></div>
+        </div>
+        
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🤖</div>
+                <h3>AI Verification</h3>
+                <p>Machine learning algorithms verify carbon capture projects using satellite imagery</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">⛓️</div>
+                <h3>Blockchain Trading</h3>
+                <p>Decentralized marketplace for carbon credits with smart contract automation</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📊</div>
+                <h3>Real-time Analytics</h3>
+                <p>Live monitoring and analytics for carbon projects and market trends</p>
+            </div>
+        </div>
+        
+        <div class="api-test">
+            <h3>🔧 API Testing</h3>
+            <button class="btn" onclick="testWebhook()">Test Webhook Health</button>
+            <button class="btn" onclick="testCarbonAnalysis()">Test Carbon Analysis</button>
+            <div id="api-response" class="response" style="display: none;"></div>
+        </div>
+        
+        <div style="margin-top: 2rem; opacity: 0.8;">
+            <p><strong>Environment:</strong> <span id="env-info">Production</span></p>
+            <p><strong>Version:</strong> 1.0.0</p>
+            <p><strong>Last Deploy:</strong> <span id="deploy-time"></span></p>
+        </div>
+    </div>
+    
+    <script>
+        // Set deployment time
+        document.getElementById('deploy-time').textContent = new Date().toLocaleString();
+        
+        // Test webhook health
+        async function testWebhook() {
+            const responseDiv = document.getElementById('api-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = 'Testing webhook health...';
+            
+            try {
+                const response = await fetch('/api/webhooks', {
+                    method: 'GET'
+                });
+                const data = await response.json();
+                
+                responseDiv.innerHTML = `
+                    <strong>✅ Webhook Health Check</strong><br>
+                    Status: ${data.status}<br>
+                    Service: ${data.service}<br>
+                    Timestamp: ${data.timestamp}
+                `;
+                
+                updateStatus('🟢 All systems operational', 'green');
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <strong>❌ Webhook Test Failed</strong><br>
+                    Error: ${error.message}
+                `;
+                updateStatus('🔴 API endpoint not responding', 'red');
+            }
+        }
+        
+        // Test carbon analysis (mock data)
+        async function testCarbonAnalysis() {
+            const responseDiv = document.getElementById('api-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = 'Running carbon analysis simulation...';
+            
+            // Simulate analysis
+            setTimeout(() => {
+                const mockAnalysis = {
+                    energyConsumption: 0.0234,
+                    carbonEmission: 0.0094,
+                    carbonScore: 'green',
+                    recommendations: [
+                        '🟢 Low carbon impact - Great work!',
+                        '♻️ Keep following sustainable coding practices'
+                    ]
+                };
+                
+                responseDiv.innerHTML = `
+                    <strong>🌱 Carbon Analysis Result</strong><br>
+                    Energy Consumption: ${mockAnalysis.energyConsumption} kWh<br>
+                    Carbon Emission: ${mockAnalysis.carbonEmission} kg CO2<br>
+                    Score: <span style="color: ${mockAnalysis.carbonScore === 'green' ? '#00ff88' : '#ff6b6b'}">${mockAnalysis.carbonScore.toUpperCase()}</span><br>
+                    <br><strong>Recommendations:</strong><br>
+                    ${mockAnalysis.recommendations.join('<br>')}
+                `;
+            }, 1500);
+        }
+        
+        function updateStatus(message, color) {
+            const statusText = document.getElementById('status-text');
+            statusText.textContent = message;
+            statusText.style.color = color === 'green' ? '#00ff88' : '#ff6b6b';
+        }
+        
+        // Auto-test on load
+        setTimeout(() => {
+            testWebhook();
+        }, 1000);
+    </script>
+</body>
+</html>

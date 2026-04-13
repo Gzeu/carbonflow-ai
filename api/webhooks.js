@@ -1,277 +1,454 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
+import { createLogger, format, transports } from 'winston';
+import { z } from 'zod';
+import jwt from 'jsonwebtoken';
 
-/**
- * Verify GitHub webhook signature
- * @param {string} signature - GitHub signature header
- * @param {string} secret - Webhook secret
- * @param {Buffer} body - Raw request body
- * @returns {boolean} Whether signature is valid
- */
-function verifySignature(signature, secret, body) {
+// ─── Logger ───────────────────────────────────────────────────────────────────
+const logger = createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: format.combine(
+    format.timestamp(),
+    format.errors({ stack: true }),
+    format.json()
+  ),
+  transports: [new transports.Console()],
+});
+
+// ─── Environment config ───────────────────────────────────────────────────────
+const CONFIG = {
+  webhookSecret: process.env.WEBHOOK_SECRET,
+  githubAppId: process.env.GITHUB_APP_ID,
+  privateKey: (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  thresholdYellow: parseFloat(process.env.CARBON_THRESHOLD_YELLOW ?? '0.5'),
+  thresholdRed: parseFloat(process.env.CARBON_THRESHOLD_RED ?? '1.0'),
+};
+
+// ─── Zod schemas ──────────────────────────────────────────────────────────────
+const CommitSchema = z.object({
+  id: z.string(),
+  message: z.string(),
+  added: z.array(z.string()).default([]),
+  removed: z.array(z.string()).default([]),
+  modified: z.array(z.string()).default([]),
+  stats: z.object({
+    additions: z.number().default(0),
+    deletions: z.number().default(0),
+  }).optional(),
+});
+
+const PushPayloadSchema = z.object({
+  commits: z.array(CommitSchema).default([]),
+  repository: z.object({
+    id: z.number(),
+    full_name: z.string(),
+    private: z.boolean().default(false),
+    default_branch: z.string().default('main'),
+  }),
+  pusher: z.object({ name: z.string(), email: z.string().optional() }),
+  installation: z.object({ id: z.number() }).optional(),
+  ref: z.string().default('refs/heads/main'),
+});
+
+const PullRequestPayloadSchema = z.object({
+  action: z.enum(['opened', 'synchronize', 'closed', 'reopened', 'edited']),
+  number: z.number(),
+  pull_request: z.object({
+    number: z.number(),
+    title: z.string(),
+    head: z.object({ sha: z.string(), ref: z.string() }),
+    base: z.object({ ref: z.string() }),
+    additions: z.number().default(0),
+    deletions: z.number().default(0),
+    changed_files: z.number().default(0),
+    draft: z.boolean().default(false),
+    merged: z.boolean().default(false),
+  }),
+  repository: z.object({
+    id: z.number(),
+    full_name: z.string(),
+    name: z.string(),
+    owner: z.object({ login: z.string() }),
+  }),
+  installation: z.object({ id: z.number() }).optional(),
+});
+
+const WorkflowRunPayloadSchema = z.object({
+  action: z.enum(['requested', 'in_progress', 'completed']),
+  workflow_run: z.object({
+    id: z.number(),
+    name: z.string(),
+    status: z.string(),
+    conclusion: z.string().nullable().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  repository: z.object({ full_name: z.string() }),
+  installation: z.object({ id: z.number() }).optional(),
+});
+
+// ─── HMAC signature verification ─────────────────────────────────────────────
+function verifySignature(signature, secret, rawBody) {
   if (!signature || !secret) {
-    console.warn('⚠️  Missing signature or secret');
+    logger.warn('Missing webhook signature or secret');
     return false;
   }
-  
-  const expectedSignature = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
-  
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(signature, 'utf8'),
-      Buffer.from(expectedSignature, 'utf8')
-    );
-  } catch (error) {
-    console.error('Signature verification error:', error.message);
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch (err) {
+    logger.error('Signature verification failed', { error: err.message });
     return false;
   }
 }
 
-/**
- * Calculate carbon footprint for code changes
- * @param {Object} commits - Array of commits
- * @returns {Object} Carbon footprint analysis
- */
-function calculateCarbonFootprint(commits) {
-  let totalLines = 0;
-  let energyConsumption = 0;
-  let carbonScore = 'green';
-  
-  commits.forEach(commit => {
-    // Estimate based on commit message and changes
-    const additions = commit.stats?.additions || 0;
-    const deletions = commit.stats?.deletions || 0;
-    totalLines += additions + deletions;
-    
-    // Simple carbon calculation (can be enhanced with AI)
-    energyConsumption += (additions * 0.001) + (deletions * 0.0005); // kWh estimate
-  });
-  
-  // Determine carbon impact level
-  if (energyConsumption > 1.0) carbonScore = 'red';
-  else if (energyConsumption > 0.5) carbonScore = 'yellow';
-  
-  const carbonEmission = energyConsumption * 0.4; // kg CO2 (average grid)
-  
-  return {
-    totalLines,
-    energyConsumption: parseFloat(energyConsumption.toFixed(4)),
-    carbonEmission: parseFloat(carbonEmission.toFixed(4)),
-    carbonScore,
-    recommendations: generateRecommendations(carbonScore, energyConsumption)
-  };
-}
-
-/**
- * Generate green coding recommendations
- * @param {string} score - Carbon score (green/yellow/red)
- * @param {number} energy - Energy consumption
- * @returns {Array} Array of recommendations
- */
-function generateRecommendations(score, energy) {
-  const recommendations = [];
-  
-  if (score === 'red') {
-    recommendations.push('🔴 High carbon impact detected!');
-    recommendations.push('💡 Consider optimizing algorithms for better efficiency');
-    recommendations.push('⚡ Review database queries and API calls');
-    recommendations.push('🔄 Implement caching to reduce computational overhead');
-  } else if (score === 'yellow') {
-    recommendations.push('🟡 Moderate carbon impact');
-    recommendations.push('📊 Monitor performance metrics');
-    recommendations.push('🌱 Consider green hosting providers');
-  } else {
-    recommendations.push('🟢 Low carbon impact - Great work!');
-    recommendations.push('♻️ Keep following sustainable coding practices');
+// ─── GitHub App JWT + Installation Token ─────────────────────────────────────
+function createAppJwt() {
+  if (!CONFIG.privateKey || !CONFIG.githubAppId) {
+    throw new Error('Missing GITHUB_APP_ID or GITHUB_PRIVATE_KEY');
   }
-  
-  return recommendations;
+  return jwt.sign(
+    { iat: Math.floor(Date.now() / 1000) - 60, exp: Math.floor(Date.now() / 1000) + 540, iss: CONFIG.githubAppId },
+    CONFIG.privateKey,
+    { algorithm: 'RS256' }
+  );
 }
 
-/**
- * Handle push events for carbon tracking
- * @param {Object} payload - GitHub webhook payload
- * @returns {Object} Processing result
- */
-async function handlePush(payload) {
-  const { commits, repository, pusher } = payload;
-  
-  console.log(`🌱 CarbonFlow: Analyzing ${commits.length} commits in ${repository.full_name}`);
-  
-  const analysis = calculateCarbonFootprint(commits);
-  
-  // Create issue if high carbon impact
-  if (analysis.carbonScore === 'red') {
-    return {
-      action: 'create_issue',
-      title: '🔴 High Carbon Footprint Detected',
-      body: `## 🌍 Carbon Impact Analysis\n\n` +
-            `**Energy Consumption:** ${analysis.energyConsumption} kWh\n` +
-            `**Carbon Emission:** ${analysis.carbonEmission} kg CO2\n` +
-            `**Lines Changed:** ${analysis.totalLines}\n\n` +
-            `### 💡 Recommendations:\n${analysis.recommendations.map(r => `- ${r}`).join('\n')}\n\n` +
-            `*Automated analysis by CarbonFlow AI*`,
-      labels: ['carbon-footprint', 'high-impact', 'sustainability']
-    };
-  }
-  
-  return {
-    action: 'log',
-    analysis
-  };
-}
-
-/**
- * Handle pull request events
- * @param {Object} payload - GitHub webhook payload
- * @returns {Object} Processing result
- */
-async function handlePullRequest(payload) {
-  const { action, pull_request, repository } = payload;
-  
-  if (action === 'opened' || action === 'synchronize') {
-    console.log(`🔍 CarbonFlow: Analyzing PR #${pull_request.number}`);
-    
-    // Simulate analysis (in real implementation, analyze diff)
-    const additions = pull_request.additions || 0;
-    const deletions = pull_request.deletions || 0;
-    const totalChanges = additions + deletions;
-    
-    let carbonLabel = 'carbon-green';
-    let carbonComment = '🟢 **Low Carbon Impact** - Sustainable code changes!';
-    
-    if (totalChanges > 500) {
-      carbonLabel = 'carbon-red';
-      carbonComment = '🔴 **High Carbon Impact** - Consider optimizing for efficiency';
-    } else if (totalChanges > 100) {
-      carbonLabel = 'carbon-yellow';
-      carbonComment = '🟡 **Moderate Carbon Impact** - Monitor performance';
+async function getInstallationToken(installationId) {
+  const appJwt = createAppJwt();
+  const res = await fetch(
+    `https://api.github.com/app/installations/${installationId}/access_tokens`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${appJwt}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
     }
-    
-    return {
-      action: 'comment_and_label',
-      comment: `${carbonComment}\n\n` +
-               `**Changes:** +${additions}/-${deletions} lines\n` +
-               `**Estimated Energy:** ${(totalChanges * 0.001).toFixed(3)} kWh\n\n` +
-               `*Analysis by CarbonFlow AI Tracker*`,
-      labels: [carbonLabel, 'sustainability-check']
-    };
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to get installation token: ${res.status} ${text}`);
   }
-  
-  return { action: 'ignore' };
+  const data = await res.json();
+  return data.token;
 }
 
-/**
- * Handle workflow run events for CI/CD carbon tracking
- * @param {Object} payload - GitHub webhook payload
- * @returns {Object} Processing result
- */
+// ─── GitHub API helpers ───────────────────────────────────────────────────────
+async function githubPost(token, path, body) {
+  const res = await fetch(`https://api.github.com${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('GitHub API error', { status: res.status, path, body: text });
+  }
+  return res;
+}
+
+async function ensureLabel(token, owner, repo, name, color) {
+  const check = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/labels/${encodeURIComponent(name)}`,
+    {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    }
+  );
+  if (check.status === 404) {
+    await githubPost(token, `/repos/${owner}/${repo}/labels`, {
+      name,
+      color,
+      description: `CarbonFlow AI — ${name}`,
+    });
+  }
+}
+
+async function addLabels(token, owner, repo, issueNumber, labels) {
+  const labelColors = {
+    'carbon-green': '2da44e',
+    'carbon-yellow': 'f0e68c',
+    'carbon-red': 'cf222e',
+    'sustainability-check': '0e8a16',
+  };
+  for (const label of labels) {
+    await ensureLabel(token, owner, repo, label, labelColors[label] || 'ededed').catch(() => {});
+  }
+  await githubPost(token, `/repos/${owner}/${repo}/issues/${issueNumber}/labels`, { labels });
+}
+
+async function postComment(token, owner, repo, issueNumber, body) {
+  await githubPost(token, `/repos/${owner}/${repo}/issues/${issueNumber}/comments`, { body });
+}
+
+// ─── Carbon scoring engine ────────────────────────────────────────────────────
+function scoreEnergy(energyKwh) {
+  if (energyKwh >= CONFIG.thresholdRed) return 'red';
+  if (energyKwh >= CONFIG.thresholdYellow) return 'yellow';
+  return 'green';
+}
+
+function estimateEnergyFromLines(additions, deletions) {
+  return additions * 0.001 + deletions * 0.0005;
+}
+
+function buildCarbonComment(score, additions, deletions, energyKwh) {
+  const carbonKg = (energyKwh * 0.4).toFixed(4);
+  const badge = score === 'green' ? '🟢' : score === 'yellow' ? '🟡' : '🔴';
+  const label =
+    score === 'green' ? 'Low Carbon Impact' :
+    score === 'yellow' ? 'Moderate Carbon Impact' : 'High Carbon Impact';
+
+  const recs = {
+    green: [
+      'Keep following sustainable coding practices ♻️',
+      'Consider green hosting providers 🌿',
+    ],
+    yellow: [
+      'Review loops and database queries for N+1 problems 📊',
+      'Implement caching where applicable 🔄',
+      'Consider splitting large PRs into smaller atomic changes',
+    ],
+    red: [
+      'Refactor heavy algorithms — look for O(n²) patterns 🔴',
+      'Add caching layers (Redis/CDN) to reduce compute load ⚡',
+      'Review database queries and add proper indexes',
+      'Consider lazy loading and code splitting',
+    ],
+  };
+
+  return [
+    `## ${badge} CarbonFlow AI — Carbon Impact Report`,
+    '',
+    '| Metric | Value |',
+    '|--------|-------|',
+    `| **Status** | ${badge} **${label}** |`,
+    `| **Lines Added** | +${additions} |`,
+    `| **Lines Removed** | -${deletions} |`,
+    `| **Estimated Energy** | \`${energyKwh.toFixed(4)} kWh\` |`,
+    `| **Estimated CO₂** | \`${carbonKg} kg\` |`,
+    '',
+    '### 💡 Recommendations',
+    ...recs[score].map(r => `- ${r}`),
+    '',
+    '---',
+    `*Automated analysis by [CarbonFlow AI Tracker](https://carbonflow-ai.vercel.app) · Thresholds: 🟡 >${CONFIG.thresholdYellow} kWh · 🔴 >${CONFIG.thresholdRed} kWh*`,
+  ].join('\n');
+}
+
+// ─── Event handlers ───────────────────────────────────────────────────────────
+async function handlePush(payload, token) {
+  const parsed = PushPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    logger.warn('Invalid push payload', { errors: parsed.error.flatten() });
+    return { action: 'ignored', reason: 'schema_validation_failed' };
+  }
+
+  const { commits, repository } = parsed.data;
+  logger.info('Processing push event', { repo: repository.full_name, commits: commits.length });
+
+  let totalAdditions = 0;
+  let totalDeletions = 0;
+  commits.forEach(c => {
+    totalAdditions += c.stats?.additions ?? c.added.length * 10;
+    totalDeletions += c.stats?.deletions ?? c.removed.length * 10;
+  });
+
+  const energy = estimateEnergyFromLines(totalAdditions, totalDeletions);
+  const score = scoreEnergy(energy);
+
+  logger.info('Push carbon analysis', { repo: repository.full_name, energy, score });
+
+  if (score === 'red' && token) {
+    const [owner, repo] = repository.full_name.split('/');
+    const commentBody = buildCarbonComment(score, totalAdditions, totalDeletions, energy);
+    await githubPost(token, `/repos/${owner}/${repo}/issues`, {
+      title: `🔴 High Carbon Footprint — Push on ${repository.default_branch}`,
+      body: commentBody,
+      labels: ['carbon-red', 'sustainability-check'],
+    }).catch(err => logger.error('Failed to create issue', { error: err.message }));
+  }
+
+  return { action: 'analyzed', score, energy: parseFloat(energy.toFixed(4)), commits: commits.length };
+}
+
+async function handlePullRequest(payload, token) {
+  const parsed = PullRequestPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    logger.warn('Invalid PR payload', { errors: parsed.error.flatten() });
+    return { action: 'ignored', reason: 'schema_validation_failed' };
+  }
+
+  const { action, pull_request: pr, repository } = parsed.data;
+
+  if (!['opened', 'synchronize'].includes(action)) {
+    return { action: 'ignored', reason: `event_action_${action}` };
+  }
+  if (pr.draft) {
+    logger.info('Skipping draft PR', { pr: pr.number });
+    return { action: 'ignored', reason: 'draft_pr' };
+  }
+
+  const { additions, deletions, number: prNumber } = pr;
+  const energy = estimateEnergyFromLines(additions, deletions);
+  const score = scoreEnergy(energy);
+  const [owner, repo] = repository.full_name.split('/');
+
+  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy });
+
+  if (token) {
+    const carbonLabel = `carbon-${score}`;
+    const staleLabels = ['carbon-green', 'carbon-yellow', 'carbon-red'].filter(l => l !== carbonLabel);
+
+    // Remove stale carbon labels gracefully
+    await Promise.allSettled(
+      staleLabels.map(stale =>
+        fetch(
+          `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/labels/${encodeURIComponent(stale)}`,
+          {
+            method: 'DELETE',
+            headers: {
+              Authorization: `token ${token}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          }
+        )
+      )
+    );
+
+    await addLabels(token, owner, repo, prNumber, [carbonLabel, 'sustainability-check'])
+      .catch(err => logger.error('Failed to add labels', { error: err.message }));
+
+    const comment = buildCarbonComment(score, additions, deletions, energy);
+    await postComment(token, owner, repo, prNumber, comment)
+      .catch(err => logger.error('Failed to post comment', { error: err.message }));
+  }
+
+  return { action: 'commented_and_labeled', pr: prNumber, score, energy: parseFloat(energy.toFixed(4)) };
+}
+
 async function handleWorkflowRun(payload) {
-  const { action, workflow_run, repository } = payload;
-  
-  if (action === 'completed') {
-    const duration = new Date(workflow_run.updated_at) - new Date(workflow_run.created_at);
-    const durationMinutes = Math.round(duration / (1000 * 60));
-    
-    // Estimate CI/CD carbon footprint
-    const estimatedEnergy = durationMinutes * 0.01; // kWh estimate
-    const carbonEmission = estimatedEnergy * 0.4; // kg CO2
-    
-    console.log(`⚡ Workflow '${workflow_run.name}' completed in ${durationMinutes}min`);
-    console.log(`🌍 Estimated carbon: ${carbonEmission.toFixed(3)} kg CO2`);
-    
-    return {
-      action: 'log_workflow',
-      workflow: workflow_run.name,
-      duration: durationMinutes,
-      energy: estimatedEnergy,
-      carbon: carbonEmission
-    };
+  const parsed = WorkflowRunPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    logger.warn('Invalid workflow_run payload', { errors: parsed.error.flatten() });
+    return { action: 'ignored', reason: 'schema_validation_failed' };
   }
-  
-  return { action: 'ignore' };
+
+  const { action, workflow_run, repository } = parsed.data;
+  if (action !== 'completed') return { action: 'ignored', reason: 'not_completed' };
+
+  const durationMs = new Date(workflow_run.updated_at) - new Date(workflow_run.created_at);
+  const durationMin = durationMs / 60000;
+  const energy = parseFloat((durationMin * 0.01).toFixed(4));
+  const carbonKg = parseFloat((energy * 0.4).toFixed(4));
+  const score = scoreEnergy(energy);
+
+  logger.info('Workflow carbon analysis', {
+    repo: repository.full_name,
+    workflow: workflow_run.name,
+    durationMin: durationMin.toFixed(1),
+    energy,
+    carbonKg,
+    score,
+    conclusion: workflow_run.conclusion,
+  });
+
+  return {
+    action: 'logged',
+    workflow: workflow_run.name,
+    durationMin: parseFloat(durationMin.toFixed(1)),
+    energy,
+    carbonKg,
+    score,
+  };
 }
 
-/**
- * Main webhook handler
- */
-module.exports = async (req, res) => {
-  // Health check
+// ─── Main handler ─────────────────────────────────────────────────────────────
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     return res.status(200).json({
       status: 'healthy',
       service: 'CarbonFlow AI Webhook',
-      timestamp: new Date().toISOString()
+      version: '2.0.0',
+      thresholds: { yellow: CONFIG.thresholdYellow, red: CONFIG.thresholdRed },
+      timestamp: new Date().toISOString(),
     });
   }
-  
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed', allowed: ['GET', 'POST'] });
   }
-  
+
+  const signature = req.headers['x-hub-signature-256'];
+  const event = req.headers['x-github-event'];
+  const deliveryId = req.headers['x-github-delivery'];
+
+  if (!event) {
+    return res.status(400).json({ error: 'Missing x-github-event header' });
+  }
+
+  const rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
+
+  if (CONFIG.webhookSecret && !verifySignature(signature, CONFIG.webhookSecret, rawBody)) {
+    logger.warn('Invalid webhook signature', { deliveryId, event });
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  logger.info('Webhook received', { event, deliveryId });
+
+  let result = { action: 'ignored' };
+
   try {
-    // Get headers and body
-    const signature = req.headers['x-hub-signature-256'];
-    const event = req.headers['x-github-event'];
-    const deliveryId = req.headers['x-github-delivery'];
-    
-    // Get raw body for signature verification
-    const body = JSON.stringify(req.body);
-    const rawBody = Buffer.from(body, 'utf8');
-    
-    // Verify signature
-    const secret = process.env.WEBHOOK_SECRET || 'carbon_secret_2025';
-    if (!verifySignature(signature, secret, rawBody)) {
-      console.error('❌ Invalid webhook signature');
-      return res.status(401).json({ error: 'Invalid signature' });
+    const installationId = req.body?.installation?.id;
+    let token = null;
+    if (installationId && CONFIG.privateKey && CONFIG.githubAppId) {
+      token = await getInstallationToken(installationId).catch(err => {
+        logger.error('Failed to get installation token', { error: err.message, installationId });
+        return null;
+      });
     }
-    
-    console.log(`\n🌱 CarbonFlow Webhook: ${event} (${deliveryId})`);
-    
-    const payload = req.body;
-    let result = { action: 'ignore' };
-    
-    // Handle different events
+
     switch (event) {
       case 'ping':
-        console.log('🏓 Ping received - CarbonFlow AI is ready!');
-        result = { action: 'pong', zen: payload.zen };
+        logger.info('Ping received', { zen: req.body?.zen });
+        result = { action: 'pong', zen: req.body?.zen ?? '' };
         break;
-        
       case 'push':
-        result = await handlePush(payload);
+        result = await handlePush(req.body, token);
         break;
-        
       case 'pull_request':
-        result = await handlePullRequest(payload);
+        result = await handlePullRequest(req.body, token);
         break;
-        
       case 'workflow_run':
-        result = await handleWorkflowRun(payload);
+        result = await handleWorkflowRun(req.body);
         break;
-        
       default:
-        console.log(`ℹ️  Event '${event}' not handled`);
+        logger.info('Unhandled event type', { event });
     }
-    
-    console.log('📊 Analysis result:', result);
-    
-    // Return success response
-    return res.status(200).json({
-      success: true,
-      event,
-      result,
-      carbonflow: {
-        version: '1.0.0',
-        service: 'CarbonFlow AI Tracker',
-        timestamp: new Date().toISOString()
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Webhook error:', error);
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
+  } catch (err) {
+    logger.error('Unhandled webhook error', { event, deliveryId, error: err.message, stack: err.stack });
+    return res.status(500).json({ error: 'Internal server error' });
   }
-};
+
+  return res.status(200).json({
+    ok: true,
+    event,
+    deliveryId,
+    result,
+    meta: {
+      service: 'CarbonFlow AI Tracker',
+      version: '2.0.0',
+      timestamp: new Date().toISOString(),
+    },
+  });
+}

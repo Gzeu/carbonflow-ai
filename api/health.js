@@ -1,40 +1,57 @@
-import { createLogger, format, transports } from 'winston';
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(format.timestamp(), format.json()),
-  transports: [new transports.Console()],
-});
-
 /**
- * GET /api/health — liveness + readiness probe
- * Checks that all required environment variables are set.
+ * GET /api/health
+ * Readiness probe — checks all required env vars are configured.
+ * Returns 200 OK with status map, or 503 if any critical var is missing.
  */
+import { createRequire } from 'module';
+
+const REQUIRED_VARS = [
+  'WEBHOOK_SECRET',
+  'GITHUB_APP_ID',
+  'GITHUB_PRIVATE_KEY',
+];
+
+const OPTIONAL_VARS = [
+  'CARBON_THRESHOLD_YELLOW',
+  'CARBON_THRESHOLD_RED',
+  'MULTIVERSX_NETWORK',
+  'BLOCKCHAIN_ENABLED',
+];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const checks = {
-    webhook_secret: !!process.env.WEBHOOK_SECRET,
-    github_app_id: !!process.env.GITHUB_APP_ID,
-    private_key: !!(process.env.GITHUB_PRIVATE_KEY && process.env.GITHUB_PRIVATE_KEY.length > 100),
-  };
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
 
-  const allPassed = Object.values(checks).every(Boolean);
-  const status = allPassed ? 'healthy' : 'degraded';
+  const checks = {};
+  let allOk = true;
 
-  logger.info('Health check', { status, checks });
+  for (const v of REQUIRED_VARS) {
+    const present = Boolean(process.env[v] && process.env[v].trim().length > 0);
+    checks[v] = present ? 'ok' : 'missing';
+    if (!present) allOk = false;
+  }
 
-  return res.status(allPassed ? 200 : 503).json({
-    status,
-    service: 'CarbonFlow AI',
-    version: '2.0.0',
-    checks,
-    thresholds: {
-      yellow_kwh: parseFloat(process.env.CARBON_THRESHOLD_YELLOW ?? '0.5'),
-      red_kwh: parseFloat(process.env.CARBON_THRESHOLD_RED ?? '1.0'),
-    },
+  for (const v of OPTIONAL_VARS) {
+    const present = Boolean(process.env[v] && process.env[v].trim().length > 0);
+    checks[v] = present ? 'ok' : 'not_set';
+  }
+
+  const status = allOk ? 200 : 503;
+
+  return res.status(status).json({
+    status: allOk ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    node: process.version,
+    uptime: Math.round(process.uptime()),
+    env: checks,
+    thresholds: {
+      yellow_kwh: parseFloat(process.env.CARBON_THRESHOLD_YELLOW || '0.5'),
+      red_kwh:    parseFloat(process.env.CARBON_THRESHOLD_RED    || '1.0'),
+    },
   });
 }

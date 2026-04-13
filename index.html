@@ -622,6 +622,7 @@ function animateCounter(el, target, decimals = 0) {
 async function loadDashboard() {
   try {
     const res = await fetch('/api/dashboard');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const { summary, recent_events, repos } = data;
 
@@ -635,9 +636,12 @@ async function loadDashboard() {
 
     document.getElementById('chart-count').textContent = `${summary.total_analyses} runs`;
 
-    // History chart
-    histChart.data.labels = recent_events.map((_,i) => `#${i+1}`);
-    histChart.data.datasets[0].data = recent_events.map(e => e.energy_kwh);
+    // History chart — FIX: use created_at as label, guard null energy_kwh
+    histChart.data.labels = recent_events.map(e => {
+      const d = new Date(e.created_at);
+      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    });
+    histChart.data.datasets[0].data = recent_events.map(e => parseFloat(e.energy_kwh) || 0);
     histChart.data.datasets[0].pointBackgroundColor = recent_events.map(e =>
       e.tier === 'green' ? '#3fb950' : e.tier === 'yellow' ? '#d29922' : '#f85149'
     );
@@ -647,21 +651,24 @@ async function loadDashboard() {
     distChart.data.datasets[0].data = [summary.green, summary.yellow, summary.red];
     distChart.update();
 
-    // Events feed
+    // Events feed — FIX: use created_at (not timestamp which doesn't exist in API response)
     const evList = document.getElementById('events-list');
-    if (recent_events.length === 0) {
+    if (!recent_events || recent_events.length === 0) {
       evList.innerHTML = '<div style="padding:var(--space-6);text-align:center;color:var(--text-muted);font-size:var(--text-sm);">No webhook events yet. Install the GitHub App to start tracking.</div>';
     } else {
       evList.innerHTML = recent_events.map(e => {
-        const ago = timeAgo(new Date(e.timestamp));
+        const dateStr = e.created_at || e.timestamp || null;
+        const ago = dateStr ? timeAgo(new Date(dateStr)) : '—';
+        const kwh = parseFloat(e.energy_kwh) || 0;
         const dotColor = e.tier === 'green' ? '#3fb950' : e.tier === 'yellow' ? '#d29922' : '#f85149';
+        const badgeType = e.event_type === 'pull_request' ? 'pull_request' : 'push';
         return `<div class="event-row">
-                    <span class="event-badge ${e.event_type}">${e.event_type === 'pull_request' ? 'PR' : e.event_type}</span>
+          <span class="event-badge ${badgeType}">${e.event_type === 'pull_request' ? 'PR' : e.event_type}</span>
           <div class="event-meta">
-            <div class="event-repo">${e.repo}</div>
+            <div class="event-repo">${e.repo || '—'}</div>
             <div class="event-time">${ago}</div>
           </div>
-          <span class="event-kwh">${e.energy_kwh.toFixed(5)} kWh</span>
+          <span class="event-kwh">${kwh.toFixed(5)} kWh</span>
           <span style="width:9px;height:9px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span>
         </div>`;
       }).join('');
@@ -669,16 +676,18 @@ async function loadDashboard() {
 
     // Repos
     const repoList = document.getElementById('repo-list');
-    if (repos.length === 0) {
+    if (!repos || repos.length === 0) {
       repoList.innerHTML = '<div style="padding:var(--space-6);text-align:center;color:var(--text-muted);font-size:var(--text-sm);">No repositories tracked yet.</div>';
     } else {
       const sorted = [...repos].sort((a,b) => b.total_kwh - a.total_kwh);
       repoList.innerHTML = sorted.map(r => {
-        const tier = r.avg_kwh < 0.5 ? 'green' : r.avg_kwh < 1.0 ? 'yellow' : 'red';
+        const avg = parseFloat(r.avg_kwh) || 0;
+        const tier = avg < 0.5 ? 'green' : avg < 1.0 ? 'yellow' : 'red';
+        const count = r.count || (r.green + r.yellow + r.red) || 0;
         return `<div class="repo-row">
           <span class="repo-name">${r.repo}</span>
-          <span class="repo-stat">${r.count} runs</span>
-          <span class="repo-stat">${r.avg_kwh.toFixed(5)} kWh avg</span>
+          <span class="repo-stat">${count} runs</span>
+          <span class="repo-stat">${avg.toFixed(5)} kWh avg</span>
           <span class="tier-dot ${tier}"></span>
         </div>`;
       }).join('');
@@ -686,6 +695,8 @@ async function loadDashboard() {
 
   } catch(err) {
     console.error('Dashboard load error:', err);
+    const evList = document.getElementById('events-list');
+    if (evList) evList.innerHTML = `<div style="padding:var(--space-4);text-align:center;color:var(--red);font-size:var(--text-sm);">Failed to load data: ${err.message}</div>`;
   }
 }
 
@@ -772,10 +783,11 @@ async function runScorer() {
 
 // ─── Time ago helper ───
 function timeAgo(date) {
+  if (!date || isNaN(date.getTime())) return '—';
   const secs = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (secs < 60)   return 'just now';
-  if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
-  if (secs < 86400)return Math.floor(secs / 3600) + 'h ago';
+  if (secs < 60)    return 'just now';
+  if (secs < 3600)  return Math.floor(secs / 60) + 'm ago';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
   return Math.floor(secs / 86400) + 'd ago';
 }
 

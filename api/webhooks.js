@@ -159,7 +159,7 @@ async function githubPost(token, path, body) {
   return res;
 }
 
-async function ensureLabel(token, owner, repo, name, color) {
+async function ensureLabel(token, owner, repo, name, color, description) {
   const check = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/labels/${encodeURIComponent(name)}`,
     {
@@ -174,22 +174,57 @@ async function ensureLabel(token, owner, repo, name, color) {
     await githubPost(token, `/repos/${owner}/${repo}/labels`, {
       name,
       color,
-      description: `CarbonFlow AI — ${name}`,
+      description: description || `CarbonFlow AI — ${name}`,
     });
   }
 }
 
-async function addLabels(token, owner, repo, issueNumber, labels) {
-  const labelColors = {
-    'carbon-green': '2da44e',
-    'carbon-yellow': 'f0e68c',
-    'carbon-red': 'cf222e',
-    'sustainability-check': '0e8a16',
+async function addLabels(token, owner, repo, issueNumber, labels, labelMeta = {}) {
+  const defaultColors = {
+    'carbon-green':          '2da44e',
+    'carbon-yellow':         'e3b341',
+    'carbon-red':            'cf222e',
+    'sustainability-check':  '0e8a16',
   };
   for (const label of labels) {
-    await ensureLabel(token, owner, repo, label, labelColors[label] || 'ededed').catch(() => {});
+    const color = labelMeta[label]?.color || defaultColors[label] || 'ededed';
+    const desc  = labelMeta[label]?.description || undefined;
+    await ensureLabel(token, owner, repo, label, color, desc).catch(() => {});
   }
   await githubPost(token, `/repos/${owner}/${repo}/issues/${issueNumber}/labels`, { labels });
+}
+
+// Remove any previously set carbon-score:XX numeric labels before adding new one
+async function cleanStaleScoreLabels(token, owner, repo, issueNumber) {
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+      {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      }
+    );
+    if (!res.ok) return;
+    const existing = await res.json();
+    const stale = (existing || []).filter(l => /^carbon-score:\s*\d+$/.test(l.name));
+    await Promise.allSettled(
+      stale.map(l =>
+        fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(l.name)}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `token ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        })
+      )
+    );
+  } catch (err) {
+    logger.warn('cleanStaleScoreLabels failed', { error: err.message });
+  }
 }
 
 async function postComment(token, owner, repo, issueNumber, body) {
@@ -198,7 +233,7 @@ async function postComment(token, owner, repo, issueNumber, body) {
 
 // ─── Carbon scoring engine ────────────────────────────────────────────────────
 function scoreEnergy(energyKwh) {
-  if (energyKwh >= CONFIG.thresholdRed) return 'red';
+  if (energyKwh >= CONFIG.thresholdRed)    return 'red';
   if (energyKwh >= CONFIG.thresholdYellow) return 'yellow';
   return 'green';
 }
@@ -207,47 +242,95 @@ function estimateEnergyFromLines(additions, deletions) {
   return additions * 0.001 + deletions * 0.0005;
 }
 
-function buildCarbonComment(score, additions, deletions, energyKwh) {
-  const carbonKg = (energyKwh * 0.4).toFixed(4);
-  const badge = score === 'green' ? '🟢' : score === 'yellow' ? '🟡' : '🔴';
-  const label =
-    score === 'green' ? 'Low Carbon Impact' :
-    score === 'yellow' ? 'Moderate Carbon Impact' : 'High Carbon Impact';
+/**
+ * Numeric carbon score 0–100.
+ * 100 = perfectly clean, 0 = very high impact.
+ */
+function calcNumericScore(kwh, yellowThreshold, redThreshold) {
+  if (kwh <= 0) return 100;
+  if (kwh >= redThreshold) {
+    return Math.max(0, Math.round(10 - (kwh - redThreshold) * 10));
+  }
+  if (kwh >= yellowThreshold) {
+    const ratio = (kwh - yellowThreshold) / (redThreshold - yellowThreshold);
+    return Math.round(70 - ratio * 20);
+  }
+  const ratio = kwh / yellowThreshold;
+  return Math.round(100 - ratio * 30);
+}
+
+/**
+ * Detects the nature of the change from line stats.
+ */
+function detectChangeType(additions, deletions) {
+  const net = additions - deletions;
+  if (deletions > additions * 1.5) return 'cleanup / refactor';
+  if (net > 300) return 'large feature';
+  if (net > 80)  return 'medium feature';
+  if (net < 0)   return 'code removal';
+  return 'small change';
+}
+
+/**
+ * Builds the Markdown PR comment with ASCII energy bar, grams CO₂, and
+ * context-aware recommendations.
+ */
+function buildCarbonComment(score, additions, deletions, energyKwh, numericScore) {
+  const carbonGrams = (energyKwh * 0.4 * 1000).toFixed(1);
+  const energyWh    = (energyKwh * 1000).toFixed(2);
+
+  const badge = score === 'green' ? '🌿' : score === 'yellow' ? '⚠️' : '🔥';
+  const statusText =
+    score === 'green'  ? '✅ Below threshold — low impact' :
+    score === 'yellow' ? '⚠️ Moderate threshold reached'  : '🚨 High threshold exceeded';
+
+  // ASCII energy bar (10 chars wide)
+  const maxKwh = CONFIG.thresholdRed * 1.5;
+  const filled = Math.min(10, Math.round((energyKwh / maxKwh) * 10));
+  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+
+  // Score emoji indicator
+  const scoreEmoji = numericScore >= 80 ? '🟢' : numericScore >= 50 ? '🟡' : '🔴';
+
+  const changeType = detectChangeType(additions, deletions);
 
   const recs = {
     green: [
-      'Keep following sustainable coding practices ♻️',
-      'Consider green hosting providers 🌿',
+      '✅ Efficient commit — keep PRs small and focused.',
+      '♻️ Consider caching static data to further reduce compute cost.',
     ],
     yellow: [
-      'Review loops and database queries for N+1 problems 📊',
-      'Implement caching where applicable 🔄',
-      'Consider splitting large PRs into smaller atomic changes',
+      '📦 PR is moderately large — consider splitting into 2–3 focused PRs.',
+      '🔄 Check for N+1 database query patterns in the new code.',
+      '🗜️ Enable dependency caching in your CI pipeline to reduce workflow energy.',
     ],
     red: [
-      'Refactor heavy algorithms — look for O(n²) patterns 🔴',
-      'Add caching layers (Redis/CDN) to reduce compute load ⚡',
-      'Review database queries and add proper indexes',
-      'Consider lazy loading and code splitting',
+      '🚨 High impact detected — review algorithms for O(n²) patterns.',
+      '⚡ Add caching layers (in-memory or CDN) for repeated expensive operations.',
+      '🔀 Separate large refactors from feature additions into distinct PRs.',
+      '📊 Consider enabling CarbonFlow auto-block to require review on red PRs.',
     ],
   };
 
   return [
     `## ${badge} CarbonFlow AI — Carbon Impact Report`,
     '',
-    '| Metric | Value |',
-    '|--------|-------|',
-    `| **Status** | ${badge} **${label}** |`,
-    `| **Lines Added** | +${additions} |`,
-    `| **Lines Removed** | -${deletions} |`,
-    `| **Estimated Energy** | \`${energyKwh.toFixed(4)} kWh\` |`,
-    `| **Estimated CO₂** | \`${carbonKg} kg\` |`,
+    `> **${changeType.charAt(0).toUpperCase() + changeType.slice(1)}** · \`+${additions}\` additions · \`-${deletions}\` deletions`,
+    '',
+    '| | Metric | Value |',
+    '|---|---|---|',
+    `| ${scoreEmoji} | **Carbon Score** | **${numericScore} / 100** |`,
+    `| 🔋 | **Energy bar** | \`${bar}\` ${energyWh} Wh |`,
+    `| 💨 | **CO₂ estimated** | **${carbonGrams} g** CO₂ |`,
+    `| 📊 | **Status** | ${statusText} |`,
+    `| ➕ | **Lines added** | +${additions} |`,
+    `| ➖ | **Lines removed** | -${deletions} |`,
     '',
     '### 💡 Recommendations',
     ...recs[score].map(r => `- ${r}`),
     '',
     '---',
-    `*Automated analysis by [CarbonFlow AI Tracker](https://carbonflow-ai.vercel.app) · Thresholds: 🟡 >${CONFIG.thresholdYellow} kWh · 🔴 >${CONFIG.thresholdRed} kWh*`,
+    `<sub>🌱 Automated analysis by [CarbonFlow AI](https://carbonflow-ai.vercel.app) · Thresholds: 🟡 >${CONFIG.thresholdYellow} kWh · 🔴 >${CONFIG.thresholdRed} kWh · v3.2.0</sub>`,
   ].join('\n');
 }
 
@@ -276,13 +359,13 @@ async function handlePush(payload, token) {
     totalDeletions += c.stats?.deletions ?? c.removed.length * 10;
   });
 
-  const energy = estimateEnergyFromLines(totalAdditions, totalDeletions);
-  const score = scoreEnergy(energy);
-  const carbonKg = parseFloat((energy * 0.4).toFixed(4));
+  const energy      = estimateEnergyFromLines(totalAdditions, totalDeletions);
+  const score       = scoreEnergy(energy);
+  const carbonKg    = parseFloat((energy * 0.4).toFixed(4));
+  const numericScore = calcNumericScore(energy, CONFIG.thresholdYellow, CONFIG.thresholdRed);
 
-  logger.info('Push carbon analysis', { repo: repository.full_name, energy, score });
+  logger.info('Push carbon analysis', { repo: repository.full_name, energy, score, numericScore });
 
-  // Persistă în Supabase (non-blocking)
   persistEvent({
     repo:       repository.full_name,
     event_type: 'push',
@@ -293,10 +376,9 @@ async function handlePush(payload, token) {
     tier:       score,
     commit_sha: after ?? null,
     actor:      pusher?.name ?? null,
-    meta:       { commits: commits.length, compare: compare ?? null },
+    meta:       { commits: commits.length, compare: compare ?? null, numeric_score: numericScore },
   }).catch(err => logger.error('DB persist failed (push)', { error: err.message }));
 
-  // Email notification (non-fatal)
   sendCarbonEmail({
     repo: repository.full_name,
     label: score,
@@ -308,9 +390,9 @@ async function handlePush(payload, token) {
 
   if (score === 'red' && token) {
     const [owner, repo] = repository.full_name.split('/');
-    const commentBody = buildCarbonComment(score, totalAdditions, totalDeletions, energy);
+    const commentBody = buildCarbonComment(score, totalAdditions, totalDeletions, energy, numericScore);
     await githubPost(token, `/repos/${owner}/${repo}/issues`, {
-      title: `🔴 High Carbon Footprint — Push on ${repository.default_branch}`,
+      title: `🔥 High Carbon Footprint — Push on ${repository.default_branch} (score: ${numericScore}/100)`,
       body: commentBody,
       labels: ['carbon-red', 'sustainability-check'],
     }).catch(err => logger.error('Failed to create issue', { error: err.message }));
@@ -319,6 +401,7 @@ async function handlePush(payload, token) {
   return {
     action: 'analyzed',
     score,
+    numeric_score: numericScore,
     energy: parseFloat(energy.toFixed(4)),
     carbon_kg: carbonKg,
     commits: commits.length,
@@ -350,14 +433,14 @@ async function handlePullRequest(payload, token) {
   }
 
   const { additions, deletions, number: prNumber, html_url, head } = pr;
-  const energy = estimateEnergyFromLines(additions, deletions);
-  const score = scoreEnergy(energy);
-  const carbonKg = parseFloat((energy * 0.4).toFixed(4));
+  const energy       = estimateEnergyFromLines(additions, deletions);
+  const score        = scoreEnergy(energy);
+  const carbonKg     = parseFloat((energy * 0.4).toFixed(4));
+  const numericScore = calcNumericScore(energy, CONFIG.thresholdYellow, CONFIG.thresholdRed);
   const [owner, repo] = repository.full_name.split('/');
 
-  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy });
+  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy, numericScore });
 
-  // Persistă în Supabase (non-blocking)
   persistEvent({
     repo:       repository.full_name,
     event_type: 'pull_request',
@@ -369,10 +452,9 @@ async function handlePullRequest(payload, token) {
     pr_number:  prNumber,
     commit_sha: head?.sha ?? null,
     actor:      null,
-    meta:       { pr_url: html_url ?? null, action },
+    meta:       { pr_url: html_url ?? null, action, numeric_score: numericScore },
   }).catch(err => logger.error('DB persist failed (PR)', { error: err.message }));
 
-  // Email notification (non-fatal)
   sendCarbonEmail({
     repo: repository.full_name,
     label: score,
@@ -383,9 +465,13 @@ async function handlePullRequest(payload, token) {
   }).catch(err => logger.error('Email notification failed (PR)', { error: err.message }));
 
   if (token) {
-    const carbonLabel = `carbon-${score}`;
-    const staleLabels = ['carbon-green', 'carbon-yellow', 'carbon-red'].filter(l => l !== carbonLabel);
+    const carbonLabel  = `carbon-${score}`;
+    const scoreLabel   = `carbon-score: ${numericScore}`;
+    const scoreLabelColor =
+      score === 'green' ? '2da44e' : score === 'yellow' ? 'e3b341' : 'cf222e';
 
+    // Remove stale tier labels
+    const staleLabels = ['carbon-green', 'carbon-yellow', 'carbon-red'].filter(l => l !== carbonLabel);
     await Promise.allSettled(
       staleLabels.map(stale =>
         fetch(
@@ -402,10 +488,22 @@ async function handlePullRequest(payload, token) {
       )
     );
 
-    await addLabels(token, owner, repo, prNumber, [carbonLabel, 'sustainability-check'])
-      .catch(err => logger.error('Failed to add labels', { error: err.message }));
+    // Remove old numeric score labels
+    await cleanStaleScoreLabels(token, owner, repo, prNumber);
 
-    const comment = buildCarbonComment(score, additions, deletions, energy);
+    // Add current labels
+    await addLabels(
+      token, owner, repo, prNumber,
+      [carbonLabel, 'sustainability-check', scoreLabel],
+      {
+        [scoreLabel]: {
+          color: scoreLabelColor,
+          description: `CarbonFlow AI — numeric score ${numericScore}/100`,
+        },
+      }
+    ).catch(err => logger.error('Failed to add labels', { error: err.message }));
+
+    const comment = buildCarbonComment(score, additions, deletions, energy, numericScore);
     await postComment(token, owner, repo, prNumber, comment)
       .catch(err => logger.error('Failed to post comment', { error: err.message }));
   }
@@ -414,6 +512,7 @@ async function handlePullRequest(payload, token) {
     action: 'commented_and_labeled',
     pr: prNumber,
     score,
+    numeric_score: numericScore,
     energy: parseFloat(energy.toFixed(4)),
     carbon_kg: carbonKg,
     rateLimitRemaining: rl.remaining,
@@ -435,16 +534,16 @@ async function handleWorkflowRun(payload) {
   const energy      = parseFloat((durationMin * 0.01).toFixed(6));
   const carbonKg    = parseFloat((energy * 0.4).toFixed(6));
   const score       = scoreEnergy(energy);
+  const numericScore = calcNumericScore(energy, CONFIG.thresholdYellow, CONFIG.thresholdRed);
 
   logger.info('Workflow carbon analysis', {
     repo: repository.full_name,
     workflow: workflow_run.name,
     durationMin: durationMin.toFixed(1),
-    energy, carbonKg, score,
+    energy, carbonKg, score, numericScore,
     conclusion: workflow_run.conclusion,
   });
 
-  // Persistă în Supabase (non-blocking)
   persistEvent({
     repo:                 repository.full_name,
     event_type:           'workflow_run',
@@ -455,9 +554,10 @@ async function handleWorkflowRun(payload) {
     tier:                 score,
     ci_duration_minutes:  parseFloat(durationMin.toFixed(2)),
     meta: {
-      workflow_name: workflow_run.name,
-      workflow_id:   workflow_run.id,
-      conclusion:    workflow_run.conclusion ?? null,
+      workflow_name:  workflow_run.name,
+      workflow_id:    workflow_run.id,
+      conclusion:     workflow_run.conclusion ?? null,
+      numeric_score:  numericScore,
     },
   }).catch(err => logger.error('DB persist failed (workflow_run)', { error: err.message }));
 
@@ -468,6 +568,7 @@ async function handleWorkflowRun(payload) {
     energy,
     carbonKg,
     score,
+    numeric_score: numericScore,
   };
 }
 
@@ -477,9 +578,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       status: 'healthy',
       service: 'CarbonFlow AI Webhook',
-      version: '3.1.0',
+      version: '3.2.0',
       thresholds: { yellow: CONFIG.thresholdYellow, red: CONFIG.thresholdRed },
-      features: ['rate-limiting', 'email-notifications', 'supabase-persistence', 'slack-alerts'],
+      features: ['rate-limiting', 'email-notifications', 'supabase-persistence', 'numeric-score', 'enhanced-pr-comments'],
       timestamp: new Date().toISOString(),
     });
   }
@@ -546,7 +647,7 @@ export default async function handler(req, res) {
     result,
     meta: {
       service: 'CarbonFlow AI Tracker',
-      version: '3.1.0',
+      version: '3.2.0',
       timestamp: new Date().toISOString(),
     },
   });

@@ -1,0 +1,14 @@
+# Vercel ignore — exclude Python/Docker/ML files from deployment
+ai-engine/
+docker-compose.yml
+deployment/
+scripts/
+requirements.txt
+*.py
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+node_modules/
+.git/

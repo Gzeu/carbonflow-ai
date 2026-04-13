@@ -5,15 +5,17 @@
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/api/webhooks",        "dest": "/api/webhooks.js"  },
-    { "src": "/api/health",          "dest": "/api/health.js"    },
-    { "src": "/api/carbon",          "dest": "/api/carbon.js"    },
-    { "src": "/api/repos",           "dest": "/api/repos.js"     },
-    { "src": "/api/dashboard",       "dest": "/api/dashboard.js" },
-    { "src": "/api/notify",          "dest": "/api/notify.js"    },
-    { "src": "/api/install",         "dest": "/api/install.js"   },
-    { "src": "/api/oauth/callback",  "dest": "/api/oauth.js"     },
-    { "src": "/(.*)",                "dest": "/index.html"       }
+    { "src": "/api/webhooks",        "dest": "/api/webhooks.js"    },
+    { "src": "/api/health",          "dest": "/api/health.js"      },
+    { "src": "/api/carbon",          "dest": "/api/carbon.js"      },
+    { "src": "/api/repos",           "dest": "/api/repos.js"       },
+    { "src": "/api/dashboard",       "dest": "/api/dashboard.js"   },
+    { "src": "/api/notify",          "dest": "/api/notify.js"      },
+    { "src": "/api/install",         "dest": "/api/install.js"     },
+    { "src": "/api/oauth/callback",  "dest": "/api/oauth.js"       },
+    { "src": "/api/multiversx",      "dest": "/api/multiversx.js"  },
+    { "src": "/api/ratelimit",       "dest": "/api/ratelimit.js"   },
+    { "src": "/(.*)",                "dest": "/index.html"         }
   ],
   "env": {
     "WEBHOOK_SECRET":     "@webhook-secret",
@@ -21,13 +23,15 @@
     "GITHUB_PRIVATE_KEY": "@github-private-key"
   },
   "functions": {
-    "api/webhooks.js":  { "maxDuration": 30 },
-    "api/health.js":    { "maxDuration": 10 },
-    "api/carbon.js":    { "maxDuration": 10 },
-    "api/repos.js":     { "maxDuration": 10 },
-    "api/dashboard.js": { "maxDuration": 15 },
-    "api/notify.js":    { "maxDuration": 10 },
-    "api/install.js":   { "maxDuration": 5  },
-    "api/oauth.js":     { "maxDuration": 15 }
+    "api/webhooks.js":    { "maxDuration": 30 },
+    "api/health.js":      { "maxDuration": 10 },
+    "api/carbon.js":      { "maxDuration": 10 },
+    "api/repos.js":       { "maxDuration": 10 },
+    "api/dashboard.js":   { "maxDuration": 15 },
+    "api/notify.js":      { "maxDuration": 10 },
+    "api/install.js":     { "maxDuration": 5  },
+    "api/oauth.js":       { "maxDuration": 15 },
+    "api/multiversx.js": { "maxDuration": 20 },
+    "api/ratelimit.js":  { "maxDuration": 5  }
   }
 }

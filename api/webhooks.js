@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { createLogger, format, transports } from 'winston';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
+import { checkRateLimit } from '../lib/rateLimiter.js';
+import { sendCarbonEmail } from '../lib/emailNotifier.js';
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
 const logger = createLogger({
@@ -47,6 +49,8 @@ const PushPayloadSchema = z.object({
   pusher: z.object({ name: z.string(), email: z.string().optional() }),
   installation: z.object({ id: z.number() }).optional(),
   ref: z.string().default('refs/heads/main'),
+  after: z.string().optional(),
+  compare: z.string().optional(),
 });
 
 const PullRequestPayloadSchema = z.object({
@@ -62,6 +66,7 @@ const PullRequestPayloadSchema = z.object({
     changed_files: z.number().default(0),
     draft: z.boolean().default(false),
     merged: z.boolean().default(false),
+    html_url: z.string().optional(),
   }),
   repository: z.object({
     id: z.number(),
@@ -253,8 +258,16 @@ async function handlePush(payload, token) {
     return { action: 'ignored', reason: 'schema_validation_failed' };
   }
 
-  const { commits, repository } = parsed.data;
-  logger.info('Processing push event', { repo: repository.full_name, commits: commits.length });
+  const { commits, repository, pusher, after, compare } = parsed.data;
+
+  // Rate limit check
+  const rl = checkRateLimit(repository.full_name);
+  if (!rl.allowed) {
+    logger.warn('Rate limit exceeded for push', { repo: repository.full_name, resetAt: rl.resetAt });
+    return { action: 'rate_limited', repo: repository.full_name, resetAt: rl.resetAt };
+  }
+
+  logger.info('Processing push event', { repo: repository.full_name, commits: commits.length, rateLimitRemaining: rl.remaining });
 
   let totalAdditions = 0;
   let totalDeletions = 0;
@@ -265,8 +278,19 @@ async function handlePush(payload, token) {
 
   const energy = estimateEnergyFromLines(totalAdditions, totalDeletions);
   const score = scoreEnergy(energy);
+  const carbonKg = parseFloat((energy * 0.4).toFixed(4));
 
   logger.info('Push carbon analysis', { repo: repository.full_name, energy, score });
+
+  // Email notification (non-fatal)
+  sendCarbonEmail({
+    repo: repository.full_name,
+    label: score,
+    energy_kwh: energy,
+    carbon_kg: carbonKg,
+    commit_url: compare ?? '',
+    actor: pusher?.name,
+  }).catch(err => logger.error('Email notification failed (push)', { error: err.message }));
 
   if (score === 'red' && token) {
     const [owner, repo] = repository.full_name.split('/');
@@ -278,7 +302,14 @@ async function handlePush(payload, token) {
     }).catch(err => logger.error('Failed to create issue', { error: err.message }));
   }
 
-  return { action: 'analyzed', score, energy: parseFloat(energy.toFixed(4)), commits: commits.length };
+  return {
+    action: 'analyzed',
+    score,
+    energy: parseFloat(energy.toFixed(4)),
+    carbon_kg: carbonKg,
+    commits: commits.length,
+    rateLimitRemaining: rl.remaining,
+  };
 }
 
 async function handlePullRequest(payload, token) {
@@ -298,18 +329,35 @@ async function handlePullRequest(payload, token) {
     return { action: 'ignored', reason: 'draft_pr' };
   }
 
-  const { additions, deletions, number: prNumber } = pr;
+  // Rate limit check
+  const rl = checkRateLimit(repository.full_name);
+  if (!rl.allowed) {
+    logger.warn('Rate limit exceeded for PR', { repo: repository.full_name, pr: pr.number, resetAt: rl.resetAt });
+    return { action: 'rate_limited', repo: repository.full_name, pr: pr.number, resetAt: rl.resetAt };
+  }
+
+  const { additions, deletions, number: prNumber, html_url } = pr;
   const energy = estimateEnergyFromLines(additions, deletions);
   const score = scoreEnergy(energy);
+  const carbonKg = parseFloat((energy * 0.4).toFixed(4));
   const [owner, repo] = repository.full_name.split('/');
 
-  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy });
+  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy, rateLimitRemaining: rl.remaining });
+
+  // Email notification (non-fatal)
+  sendCarbonEmail({
+    repo: repository.full_name,
+    label: score,
+    energy_kwh: energy,
+    carbon_kg: carbonKg,
+    commit_url: html_url ?? '',
+    prNumber,
+  }).catch(err => logger.error('Email notification failed (PR)', { error: err.message }));
 
   if (token) {
     const carbonLabel = `carbon-${score}`;
     const staleLabels = ['carbon-green', 'carbon-yellow', 'carbon-red'].filter(l => l !== carbonLabel);
 
-    // Remove stale carbon labels gracefully
     await Promise.allSettled(
       staleLabels.map(stale =>
         fetch(
@@ -334,7 +382,14 @@ async function handlePullRequest(payload, token) {
       .catch(err => logger.error('Failed to post comment', { error: err.message }));
   }
 
-  return { action: 'commented_and_labeled', pr: prNumber, score, energy: parseFloat(energy.toFixed(4)) };
+  return {
+    action: 'commented_and_labeled',
+    pr: prNumber,
+    score,
+    energy: parseFloat(energy.toFixed(4)),
+    carbon_kg: carbonKg,
+    rateLimitRemaining: rl.remaining,
+  };
 }
 
 async function handleWorkflowRun(payload) {
@@ -379,8 +434,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       status: 'healthy',
       service: 'CarbonFlow AI Webhook',
-      version: '2.0.0',
+      version: '3.0.0',
       thresholds: { yellow: CONFIG.thresholdYellow, red: CONFIG.thresholdRed },
+      features: ['rate-limiting', 'email-notifications', 'multiversx-ready', 'slack-alerts'],
       timestamp: new Date().toISOString(),
     });
   }
@@ -447,7 +503,7 @@ export default async function handler(req, res) {
     result,
     meta: {
       service: 'CarbonFlow AI Tracker',
-      version: '2.0.0',
+      version: '3.0.0',
       timestamp: new Date().toISOString(),
     },
   });

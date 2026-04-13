@@ -4,6 +4,7 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { checkRateLimit } from '../lib/rateLimiter.js';
 import { sendCarbonEmail } from '../lib/emailNotifier.js';
+import { persistEvent } from '../lib/db.js';
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
 const logger = createLogger({
@@ -260,14 +261,13 @@ async function handlePush(payload, token) {
 
   const { commits, repository, pusher, after, compare } = parsed.data;
 
-  // Rate limit check
   const rl = checkRateLimit(repository.full_name);
   if (!rl.allowed) {
     logger.warn('Rate limit exceeded for push', { repo: repository.full_name, resetAt: rl.resetAt });
     return { action: 'rate_limited', repo: repository.full_name, resetAt: rl.resetAt };
   }
 
-  logger.info('Processing push event', { repo: repository.full_name, commits: commits.length, rateLimitRemaining: rl.remaining });
+  logger.info('Processing push event', { repo: repository.full_name, commits: commits.length });
 
   let totalAdditions = 0;
   let totalDeletions = 0;
@@ -281,6 +281,20 @@ async function handlePush(payload, token) {
   const carbonKg = parseFloat((energy * 0.4).toFixed(4));
 
   logger.info('Push carbon analysis', { repo: repository.full_name, energy, score });
+
+  // Persistă în Supabase (non-blocking)
+  persistEvent({
+    repo:       repository.full_name,
+    event_type: 'push',
+    additions:  totalAdditions,
+    deletions:  totalDeletions,
+    energy_kwh: parseFloat(energy.toFixed(6)),
+    carbon_kg:  carbonKg,
+    tier:       score,
+    commit_sha: after ?? null,
+    actor:      pusher?.name ?? null,
+    meta:       { commits: commits.length, compare: compare ?? null },
+  }).catch(err => logger.error('DB persist failed (push)', { error: err.message }));
 
   // Email notification (non-fatal)
   sendCarbonEmail({
@@ -329,20 +343,34 @@ async function handlePullRequest(payload, token) {
     return { action: 'ignored', reason: 'draft_pr' };
   }
 
-  // Rate limit check
   const rl = checkRateLimit(repository.full_name);
   if (!rl.allowed) {
     logger.warn('Rate limit exceeded for PR', { repo: repository.full_name, pr: pr.number, resetAt: rl.resetAt });
     return { action: 'rate_limited', repo: repository.full_name, pr: pr.number, resetAt: rl.resetAt };
   }
 
-  const { additions, deletions, number: prNumber, html_url } = pr;
+  const { additions, deletions, number: prNumber, html_url, head } = pr;
   const energy = estimateEnergyFromLines(additions, deletions);
   const score = scoreEnergy(energy);
   const carbonKg = parseFloat((energy * 0.4).toFixed(4));
   const [owner, repo] = repository.full_name.split('/');
 
-  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy, rateLimitRemaining: rl.remaining });
+  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy });
+
+  // Persistă în Supabase (non-blocking)
+  persistEvent({
+    repo:       repository.full_name,
+    event_type: 'pull_request',
+    additions,
+    deletions,
+    energy_kwh: parseFloat(energy.toFixed(6)),
+    carbon_kg:  carbonKg,
+    tier:       score,
+    pr_number:  prNumber,
+    commit_sha: head?.sha ?? null,
+    actor:      null,
+    meta:       { pr_url: html_url ?? null, action },
+  }).catch(err => logger.error('DB persist failed (PR)', { error: err.message }));
 
   // Email notification (non-fatal)
   sendCarbonEmail({
@@ -402,21 +430,36 @@ async function handleWorkflowRun(payload) {
   const { action, workflow_run, repository } = parsed.data;
   if (action !== 'completed') return { action: 'ignored', reason: 'not_completed' };
 
-  const durationMs = new Date(workflow_run.updated_at) - new Date(workflow_run.created_at);
+  const durationMs  = new Date(workflow_run.updated_at) - new Date(workflow_run.created_at);
   const durationMin = durationMs / 60000;
-  const energy = parseFloat((durationMin * 0.01).toFixed(4));
-  const carbonKg = parseFloat((energy * 0.4).toFixed(4));
-  const score = scoreEnergy(energy);
+  const energy      = parseFloat((durationMin * 0.01).toFixed(6));
+  const carbonKg    = parseFloat((energy * 0.4).toFixed(6));
+  const score       = scoreEnergy(energy);
 
   logger.info('Workflow carbon analysis', {
     repo: repository.full_name,
     workflow: workflow_run.name,
     durationMin: durationMin.toFixed(1),
-    energy,
-    carbonKg,
-    score,
+    energy, carbonKg, score,
     conclusion: workflow_run.conclusion,
   });
+
+  // Persistă în Supabase (non-blocking)
+  persistEvent({
+    repo:                 repository.full_name,
+    event_type:           'workflow_run',
+    additions:            0,
+    deletions:            0,
+    energy_kwh:           energy,
+    carbon_kg:            carbonKg,
+    tier:                 score,
+    ci_duration_minutes:  parseFloat(durationMin.toFixed(2)),
+    meta: {
+      workflow_name: workflow_run.name,
+      workflow_id:   workflow_run.id,
+      conclusion:    workflow_run.conclusion ?? null,
+    },
+  }).catch(err => logger.error('DB persist failed (workflow_run)', { error: err.message }));
 
   return {
     action: 'logged',
@@ -434,9 +477,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       status: 'healthy',
       service: 'CarbonFlow AI Webhook',
-      version: '3.0.0',
+      version: '3.1.0',
       thresholds: { yellow: CONFIG.thresholdYellow, red: CONFIG.thresholdRed },
-      features: ['rate-limiting', 'email-notifications', 'multiversx-ready', 'slack-alerts'],
+      features: ['rate-limiting', 'email-notifications', 'supabase-persistence', 'slack-alerts'],
       timestamp: new Date().toISOString(),
     });
   }
@@ -445,8 +488,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed', allowed: ['GET', 'POST'] });
   }
 
-  const signature = req.headers['x-hub-signature-256'];
-  const event = req.headers['x-github-event'];
+  const signature  = req.headers['x-hub-signature-256'];
+  const event      = req.headers['x-github-event'];
   const deliveryId = req.headers['x-github-delivery'];
 
   if (!event) {
@@ -503,7 +546,7 @@ export default async function handler(req, res) {
     result,
     meta: {
       service: 'CarbonFlow AI Tracker',
-      version: '3.0.0',
+      version: '3.1.0',
       timestamp: new Date().toISOString(),
     },
   });

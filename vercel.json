@@ -8,36 +8,23 @@
     }
   ],
   "routes": [
-    {
-      "src": "/api/webhooks",
-      "dest": "/api/webhooks.js"
-    },
-    {
-      "src": "/api/health",
-      "dest": "/api/health.js"
-    },
-    {
-      "src": "/api/carbon",
-      "dest": "/api/carbon.js"
-    },
-    {
-      "src": "/api/repos",
-      "dest": "/api/repos.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+    { "src": "/api/webhooks",  "dest": "/api/webhooks.js"  },
+    { "src": "/api/health",    "dest": "/api/health.js"    },
+    { "src": "/api/carbon",    "dest": "/api/carbon.js"    },
+    { "src": "/api/repos",     "dest": "/api/repos.js"     },
+    { "src": "/api/dashboard", "dest": "/api/dashboard.js" },
+    { "src": "/(.*)",          "dest": "/index.html"       }
   ],
   "env": {
-    "WEBHOOK_SECRET": "@webhook-secret",
-    "GITHUB_APP_ID": "@github-app-id",
-    "GITHUB_PRIVATE_KEY": "@github-private-key"
+    "WEBHOOK_SECRET":      "@webhook-secret",
+    "GITHUB_APP_ID":       "@github-app-id",
+    "GITHUB_PRIVATE_KEY":  "@github-private-key"
   },
   "functions": {
-    "api/webhooks.js": { "maxDuration": 30 },
-    "api/health.js":   { "maxDuration": 10 },
-    "api/carbon.js":   { "maxDuration": 10 },
-    "api/repos.js":    { "maxDuration": 10 }
+    "api/webhooks.js":  { "maxDuration": 30 },
+    "api/health.js":    { "maxDuration": 10 },
+    "api/carbon.js":    { "maxDuration": 10 },
+    "api/repos.js":     { "maxDuration": 10 },
+    "api/dashboard.js": { "maxDuration": 15 }
   }
 }

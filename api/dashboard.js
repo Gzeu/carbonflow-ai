@@ -2,6 +2,13 @@
  * GET /api/dashboard
  * Returnează analytics agregate pentru dashboard UI.
  * Date reale din Supabase; fallback automat la seed data dacă DB nu e configurată.
+ *
+ * Wave 4 additions:
+ *  - weeklyTrend: week-over-week kWh comparison (this week vs last week)
+ *  - movingAvg7: 7-day rolling average kWh per day
+ *  - eventDistribution: breakdown by event_type with % share
+ *  - repoHealthScores: per-repo health score 0–100 based on tier ratio
+ *  - summary.week_over_week_pct: % change in total kWh this week vs last
  */
 import { createLogger, format, transports } from 'winston';
 import { queryEvents, queryRepoStats } from '../lib/db.js';
@@ -17,14 +24,16 @@ const RED    = parseFloat(process.env.CARBON_THRESHOLD_RED    || '1.0');
 
 // Seed fallback — folosit DOAR când Supabase nu e configurat
 const SEED_EVENTS = [
-  { repo: 'carbonflow-ai',    event_type: 'push',         additions: 142, deletions: 38,  ci_duration_minutes: 2.1,  created_at: new Date(Date.now() - 3600000 * 1).toISOString() },
-  { repo: 'carbonflow-ai',    event_type: 'pull_request', additions: 89,  deletions: 12,  ci_duration_minutes: 1.8,  created_at: new Date(Date.now() - 3600000 * 3).toISOString() },
-  { repo: 'openclaw-hub',     event_type: 'push',         additions: 520, deletions: 210, ci_duration_minutes: 6.5,  created_at: new Date(Date.now() - 3600000 * 5).toISOString() },
-  { repo: 'vaultkey',         event_type: 'push',         additions: 67,  deletions: 5,   ci_duration_minutes: 1.2,  created_at: new Date(Date.now() - 3600000 * 8).toISOString() },
-  { repo: 'openclaw-hub',     event_type: 'pull_request', additions: 1240,deletions: 300, ci_duration_minutes: 12.0, created_at: new Date(Date.now() - 3600000 * 12).toISOString() },
-  { repo: 'carbonflow-ai',    event_type: 'push',         additions: 33,  deletions: 91,  ci_duration_minutes: 0.9,  created_at: new Date(Date.now() - 3600000 * 16).toISOString() },
-  { repo: 'agentbazaar',      event_type: 'push',         additions: 280, deletions: 44,  ci_duration_minutes: 4.4,  created_at: new Date(Date.now() - 3600000 * 20).toISOString() },
-  { repo: 'pixelmolt',        event_type: 'push',         additions: 95,  deletions: 20,  ci_duration_minutes: 2.0,  created_at: new Date(Date.now() - 3600000 * 26).toISOString() },
+  { repo: 'carbonflow-ai',    event_type: 'push',         additions: 142, deletions: 38,  ci_duration_minutes: 2.1,  created_at: new Date(Date.now() - 86400000 * 0.5).toISOString() },
+  { repo: 'carbonflow-ai',    event_type: 'pull_request', additions: 89,  deletions: 12,  ci_duration_minutes: 1.8,  created_at: new Date(Date.now() - 86400000 * 1).toISOString() },
+  { repo: 'openclaw-hub',     event_type: 'push',         additions: 520, deletions: 210, ci_duration_minutes: 6.5,  created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
+  { repo: 'vaultkey',         event_type: 'push',         additions: 67,  deletions: 5,   ci_duration_minutes: 1.2,  created_at: new Date(Date.now() - 86400000 * 3).toISOString() },
+  { repo: 'openclaw-hub',     event_type: 'pull_request', additions: 1240,deletions: 300, ci_duration_minutes: 12.0, created_at: new Date(Date.now() - 86400000 * 5).toISOString() },
+  { repo: 'carbonflow-ai',    event_type: 'push',         additions: 33,  deletions: 91,  ci_duration_minutes: 0.9,  created_at: new Date(Date.now() - 86400000 * 7).toISOString() },
+  { repo: 'agentbazaar',      event_type: 'push',         additions: 280, deletions: 44,  ci_duration_minutes: 4.4,  created_at: new Date(Date.now() - 86400000 * 9).toISOString() },
+  { repo: 'pixelmolt',        event_type: 'push',         additions: 95,  deletions: 20,  ci_duration_minutes: 2.0,  created_at: new Date(Date.now() - 86400000 * 11).toISOString() },
+  { repo: 'agentbazaar',      event_type: 'workflow_run', additions: 0,   deletions: 0,   ci_duration_minutes: 3.5,  created_at: new Date(Date.now() - 86400000 * 13).toISOString() },
+  { repo: 'vaultkey',         event_type: 'pull_request', additions: 200, deletions: 60,  ci_duration_minutes: 2.8,  created_at: new Date(Date.now() - 86400000 * 10).toISOString() },
 ];
 
 const KWH_LINE_ADD = 0.001;
@@ -32,7 +41,12 @@ const KWH_LINE_DEL = 0.0005;
 const KG_PER_KWH   = 0.4;
 
 function computeSeedEvent(e) {
-  const kwh = e.additions * KWH_LINE_ADD + e.deletions * KWH_LINE_DEL;
+  let kwh;
+  if (e.event_type === 'workflow_run') {
+    kwh = (e.ci_duration_minutes || 0) * 0.01;
+  } else {
+    kwh = e.additions * KWH_LINE_ADD + e.deletions * KWH_LINE_DEL;
+  }
   const tier = kwh >= RED ? 'red' : kwh >= YELLOW ? 'yellow' : 'green';
   return {
     ...e,
@@ -40,6 +54,104 @@ function computeSeedEvent(e) {
     carbon_kg:  parseFloat((kwh * KG_PER_KWH).toFixed(6)),
     tier,
   };
+}
+
+// ─── Wave 4: Weekly trend (this week vs last week) ──────────────────────
+function buildWeeklyTrend(events) {
+  const now  = Date.now();
+  const oneDay = 86400000;
+  const thisWeekStart = now - oneDay * 7;
+  const lastWeekStart = now - oneDay * 14;
+
+  const thisWeek = events.filter(e => {
+    const t = new Date(e.created_at).getTime();
+    return t >= thisWeekStart && t <= now;
+  });
+  const lastWeek = events.filter(e => {
+    const t = new Date(e.created_at).getTime();
+    return t >= lastWeekStart && t < thisWeekStart;
+  });
+
+  const thisKwh  = thisWeek.reduce((a, e) => a + parseFloat(e.energy_kwh), 0);
+  const lastKwh  = lastWeek.reduce((a, e) => a + parseFloat(e.energy_kwh), 0);
+  const thisCo2  = thisWeek.reduce((a, e) => a + parseFloat(e.carbon_kg), 0);
+  const lastCo2  = lastWeek.reduce((a, e) => a + parseFloat(e.carbon_kg), 0);
+
+  const pct = lastKwh > 0
+    ? Math.round(((thisKwh - lastKwh) / lastKwh) * 100)
+    : null;
+
+  const direction = pct === null ? 'no_data'
+    : Math.abs(pct) < 2 ? 'stable'
+    : pct > 0 ? 'up' : 'down';
+
+  return {
+    this_week: {
+      events:    thisWeek.length,
+      total_kwh: parseFloat(thisKwh.toFixed(6)),
+      total_co2_kg: parseFloat(thisCo2.toFixed(6)),
+      green:  thisWeek.filter(e => e.tier === 'green').length,
+      yellow: thisWeek.filter(e => e.tier === 'yellow').length,
+      red:    thisWeek.filter(e => e.tier === 'red').length,
+    },
+    last_week: {
+      events:    lastWeek.length,
+      total_kwh: parseFloat(lastKwh.toFixed(6)),
+      total_co2_kg: parseFloat(lastCo2.toFixed(6)),
+      green:  lastWeek.filter(e => e.tier === 'green').length,
+      yellow: lastWeek.filter(e => e.tier === 'yellow').length,
+      red:    lastWeek.filter(e => e.tier === 'red').length,
+    },
+    week_over_week_pct: pct,
+    direction,
+  };
+}
+
+// ─── Wave 4: 7-day moving average kWh per day ───────────────────────────
+function buildMovingAvg7(dailyTrend) {
+  return dailyTrend.map((day, idx) => {
+    const window = dailyTrend.slice(Math.max(0, idx - 6), idx + 1);
+    const avg = window.reduce((a, d) => a + d.total_kwh, 0) / window.length;
+    return {
+      date:       day.date,
+      kwh_avg_7d: parseFloat(avg.toFixed(6)),
+    };
+  });
+}
+
+// ─── Wave 4: Event type distribution ──────────────────────────────────────
+function buildEventDistribution(events) {
+  const types = ['push', 'pull_request', 'workflow_run'];
+  const total = events.length || 1;
+  return types.map(type => {
+    const group = events.filter(e => e.event_type === type);
+    const kwh   = group.reduce((a, e) => a + parseFloat(e.energy_kwh), 0);
+    return {
+      event_type:  type,
+      count:       group.length,
+      pct_count:   Math.round((group.length / total) * 100),
+      total_kwh:   parseFloat(kwh.toFixed(6)),
+      green:       group.filter(e => e.tier === 'green').length,
+      yellow:      group.filter(e => e.tier === 'yellow').length,
+      red:         group.filter(e => e.tier === 'red').length,
+    };
+  });
+}
+
+// ─── Wave 4: Per-repo health score 0–100 ────────────────────────────────────
+function calcRepoHealthScore(green, yellow, red) {
+  const total = green + yellow + red;
+  if (total === 0) return null;
+  // Green = +1.0 pt, Yellow = +0.4 pt, Red = 0 pt per event
+  const raw = (green * 1.0 + yellow * 0.4) / total;
+  return Math.round(raw * 100);
+}
+
+function enrichReposWithHealth(repos) {
+  return repos.map(r => ({
+    ...r,
+    health_score: calcRepoHealthScore(r.green, r.yellow, r.red),
+  }));
 }
 
 export default async function handler(req, res) {
@@ -51,7 +163,6 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    // Încearcă să ia date reale din Supabase
     const [liveEvents, liveRepos] = await Promise.all([
       queryEvents({ limit: 100 }),
       queryRepoStats(),
@@ -70,22 +181,36 @@ export default async function handler(req, res) {
     const totalKwh  = events.reduce((a, e) => a + parseFloat(e.energy_kwh), 0);
     const totalCo2  = events.reduce((a, e) => a + parseFloat(e.carbon_kg), 0);
 
-    // Trend: raggruppa per giorno (ultimi 30gg)
+    // Trend zilnic (14 zile)
     const trend = buildTrend(events);
+
+    // ── Wave 4 computations ─────────────────────────────────────
+    const weeklyTrend        = buildWeeklyTrend(events);
+    const movingAvg7         = buildMovingAvg7(trend);
+    const eventDistribution  = buildEventDistribution(events);
+    const reposWithHealth    = enrichReposWithHealth(repos.slice(0, 20));
+    // ──────────────────────────────────────────────────────────
 
     return res.status(200).json({
       summary: {
-        total_analyses:  total,
-        green:           greenCnt,
-        yellow:          yellowCnt,
-        red:             redCnt,
-        total_kwh:       parseFloat(totalKwh.toFixed(6)),
-        avg_kwh:         total > 0 ? parseFloat((totalKwh / total).toFixed(6)) : 0,
-        total_co2_kg:    parseFloat(totalCo2.toFixed(6)),
+        total_analyses:        total,
+        green:                 greenCnt,
+        yellow:                yellowCnt,
+        red:                   redCnt,
+        total_kwh:             parseFloat(totalKwh.toFixed(6)),
+        avg_kwh:               total > 0 ? parseFloat((totalKwh / total).toFixed(6)) : 0,
+        total_co2_kg:          parseFloat(totalCo2.toFixed(6)),
+        // Wave 4: week-over-week shortcut in summary
+        week_over_week_pct:    weeklyTrend.week_over_week_pct,
+        week_direction:        weeklyTrend.direction,
       },
       thresholds: { yellow: YELLOW, red: RED },
-      repos: repos.slice(0, 20),
+      repos: reposWithHealth,
       trend,
+      // Wave 4 new fields
+      weekly_trend:       weeklyTrend,
+      moving_avg_7d:      movingAvg7,
+      event_distribution: eventDistribution,
       recent_events: events.slice(0, 20).map(e => ({
         id:          e.id ?? null,
         repo:        e.repo,
@@ -99,7 +224,7 @@ export default async function handler(req, res) {
         created_at:  e.created_at,
       })),
       source: isLive ? 'live' : 'seed',
-      meta: { generated_at: new Date().toISOString(), version: '2.0' },
+      meta: { generated_at: new Date().toISOString(), version: '3.0' },
     });
   } catch (err) {
     logger.error('Dashboard error', { error: err.message, stack: err.stack });
@@ -127,7 +252,6 @@ function buildSeedRepos(events) {
 function buildTrend(events) {
   const days = {};
   const now = Date.now();
-  // Inițializează ultimele 14 zile
   for (let i = 13; i >= 0; i--) {
     const d = new Date(now - 86400000 * i);
     const key = d.toISOString().slice(0, 10);

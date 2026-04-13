@@ -4,7 +4,7 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { checkRateLimit } from '../lib/rateLimiter.js';
 import { sendCarbonEmail } from '../lib/emailNotifier.js';
-import { persistEvent, getLastEvent } from '../lib/db.js';
+import { persistEvent, getLastEvent, getGreenStreak } from '../lib/db.js';
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
 const logger = createLogger({
@@ -194,7 +194,6 @@ async function addLabels(token, owner, repo, issueNumber, labels, labelMeta = {}
   await githubPost(token, `/repos/${owner}/${repo}/issues/${issueNumber}/labels`, { labels });
 }
 
-// Remove any previously set carbon-score:XX numeric labels before adding new one
 async function cleanStaleScoreLabels(token, owner, repo, issueNumber) {
   try {
     const res = await fetch(
@@ -242,10 +241,6 @@ function estimateEnergyFromLines(additions, deletions) {
   return additions * 0.001 + deletions * 0.0005;
 }
 
-/**
- * Numeric carbon score 0–100.
- * 100 = perfectly clean, 0 = very high impact.
- */
 function calcNumericScore(kwh, yellowThreshold, redThreshold) {
   if (kwh <= 0) return 100;
   if (kwh >= redThreshold) {
@@ -259,9 +254,6 @@ function calcNumericScore(kwh, yellowThreshold, redThreshold) {
   return Math.round(100 - ratio * 30);
 }
 
-/**
- * Detects the nature of the change from line stats.
- */
 function detectChangeType(additions, deletions) {
   const net = additions - deletions;
   if (deletions > additions * 1.5) return 'cleanup / refactor';
@@ -271,14 +263,6 @@ function detectChangeType(additions, deletions) {
   return 'small change';
 }
 
-/**
- * Calculates the trend % between current and last event energy.
- * Returns an object: { pct: number, direction: 'up'|'down'|'same', label: string }
- *
- * @param {number} currentKwh
- * @param {number|null} lastKwh
- * @returns {{ pct: number, direction: string, label: string }|null}
- */
 function calcTrend(currentKwh, lastKwh) {
   if (lastKwh == null || lastKwh === 0) return null;
   const pct = Math.round(((currentKwh - lastKwh) / lastKwh) * 100);
@@ -288,17 +272,53 @@ function calcTrend(currentKwh, lastKwh) {
 }
 
 /**
- * Builds the Markdown PR comment with ASCII energy bar, grams CO₂,
- * trend vs last PR, and context-aware recommendations.
- *
- * @param {string} score
- * @param {number} additions
- * @param {number} deletions
- * @param {number} energyKwh
- * @param {number} numericScore
- * @param {{ energy_kwh: number, tier: string, numeric_score: number|null, created_at: string }|null} lastEvent
+ * Wave 6: Carbon budget — how many lines remain before hitting yellow/red.
+ * Uses 0.001 kWh/line (same constant as estimateEnergyFromLines).
  */
-function buildCarbonComment(score, additions, deletions, energyKwh, numericScore, lastEvent = null) {
+function calcBudgetRows(energyKwh) {
+  const KWH_PER_LINE = 0.001;
+  const remainYellow = Math.max(0, CONFIG.thresholdYellow - energyKwh);
+  const remainRed    = Math.max(0, CONFIG.thresholdRed    - energyKwh);
+  const linesToYellow = remainYellow > 0 ? Math.floor(remainYellow / KWH_PER_LINE) : 0;
+  const linesToRed    = remainRed    > 0 ? Math.floor(remainRed    / KWH_PER_LINE) : 0;
+
+  // Only show budget rows when there's still room (not already past threshold)
+  if (energyKwh >= CONFIG.thresholdRed) return [];
+
+  if (energyKwh >= CONFIG.thresholdYellow) {
+    // Yellow zone — show only distance to red
+    return [
+      `| 🚦 | **Budget to 🔴 red** | ~${linesToRed.toLocaleString()} lines remaining |`,
+    ];
+  }
+
+  // Green zone — show both
+  return [
+    `| 🟡 | **Budget to yellow** | ~${linesToYellow.toLocaleString()} lines remaining |`,
+    `| 🔴 | **Budget to red** | ~${linesToRed.toLocaleString()} lines remaining |`,
+  ];
+}
+
+/**
+ * Wave 6: Format green streak row.
+ * streak = 0  → omit (don't show it).
+ * streak = 1  → "1 green PR" (this one just started it).
+ * streak >= 2 → fire emoji milestone.
+ */
+function buildStreakRow(streak) {
+  if (!streak || streak < 1) return [];
+  const fire   = streak >= 10 ? '🔥🔥' : streak >= 5 ? '🔥' : '🌱';
+  const suffix = streak === 1
+    ? 'First green in a row — keep it up!'
+    : `**${streak} green PR${streak > 1 ? 's' : ''} in a row!**`;
+  return [`| ${fire} | **Green streak** | ${suffix} |`];
+}
+
+/**
+ * Builds the Markdown PR comment.
+ * Wave 6 additions: green_streak row + carbon_budget rows.
+ */
+function buildCarbonComment(score, additions, deletions, energyKwh, numericScore, lastEvent = null, greenStreak = 0) {
   const carbonGrams = (energyKwh * 0.4 * 1000).toFixed(1);
   const energyWh    = (energyKwh * 1000).toFixed(2);
 
@@ -307,7 +327,6 @@ function buildCarbonComment(score, additions, deletions, energyKwh, numericScore
     score === 'green'  ? '✅ Below threshold — low impact' :
     score === 'yellow' ? '⚠️ Moderate threshold reached'  : '🚨 High threshold exceeded';
 
-  // ASCII energy bar (10 chars wide)
   const maxKwh = CONFIG.thresholdRed * 1.5;
   const filled = Math.min(10, Math.round((energyKwh / maxKwh) * 10));
   const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
@@ -315,16 +334,15 @@ function buildCarbonComment(score, additions, deletions, energyKwh, numericScore
   const scoreEmoji = numericScore >= 80 ? '🟢' : numericScore >= 50 ? '🟡' : '🔴';
   const changeType = detectChangeType(additions, deletions);
 
-  // Trend row (only if we have a previous event)
   const trend = calcTrend(energyKwh, lastEvent?.energy_kwh ?? null);
-  const trendRows = trend ? [
-    `| 📈 | **Trend vs last PR** | ${trend.label} |`,
-  ] : [];
-
-  // Previous PR score comparison
+  const trendRows = trend ? [`| 📈 | **Trend vs last PR** | ${trend.label} |`] : [];
   const prevScoreRows = (lastEvent?.numeric_score != null) ? [
     `| 🔁 | **Prev PR score** | ${lastEvent.numeric_score} / 100 · tier: \`${lastEvent.tier}\` |`,
   ] : [];
+
+  // Wave 6 additions
+  const streakRows = buildStreakRow(greenStreak);
+  const budgetRows = calcBudgetRows(energyKwh);
 
   const recs = {
     green: [
@@ -344,7 +362,6 @@ function buildCarbonComment(score, additions, deletions, energyKwh, numericScore
     ],
   };
 
-  // Extra rec if trend is going up
   if (trend?.direction === 'up' && trend.pct > 20) {
     recs[score].unshift(`⚠️ Carbon impact increased **+${trend.pct}%** vs last PR — worth investigating what changed.`);
   }
@@ -364,12 +381,15 @@ function buildCarbonComment(score, additions, deletions, energyKwh, numericScore
     `| ➖ | **Lines removed** | -${deletions} |`,
     ...trendRows,
     ...prevScoreRows,
+    // Wave 6: streak + budget rows injected here
+    ...streakRows,
+    ...budgetRows,
     '',
     '### 💡 Recommendations',
     ...recs[score].map(r => `- ${r}`),
     '',
     '---',
-    `<sub>🌱 Automated analysis by [CarbonFlow AI](https://carbonflow-ai.vercel.app) · Thresholds: 🟡 >${CONFIG.thresholdYellow} kWh · 🔴 >${CONFIG.thresholdRed} kWh · v3.3.0</sub>`,
+    `<sub>🌱 Automated analysis by [CarbonFlow AI](https://carbonflow-ai.vercel.app) · Thresholds: 🟡 >${CONFIG.thresholdYellow} kWh · 🔴 >${CONFIG.thresholdRed} kWh · v4.0.0</sub>`,
   ].join('\n');
 }
 
@@ -429,7 +449,7 @@ async function handlePush(payload, token) {
 
   if (score === 'red' && token) {
     const [owner, repo] = repository.full_name.split('/');
-    const commentBody = buildCarbonComment(score, totalAdditions, totalDeletions, energy, numericScore, null);
+    const commentBody = buildCarbonComment(score, totalAdditions, totalDeletions, energy, numericScore, null, 0);
     await githubPost(token, `/repos/${owner}/${repo}/issues`, {
       title: `🔥 High Carbon Footprint — Push on ${repository.default_branch} (score: ${numericScore}/100)`,
       body: commentBody,
@@ -478,18 +498,32 @@ async function handlePullRequest(payload, token) {
   const numericScore = calcNumericScore(energy, CONFIG.thresholdYellow, CONFIG.thresholdRed);
   const [owner, repo] = repository.full_name.split('/');
 
-  // ── Wave 3: fetch last PR event for trend comparison ──────────────────────
-  const lastEvent = await getLastEvent(repository.full_name, 'pull_request').catch(err => {
-    logger.warn('getLastEvent failed — trend unavailable', { error: err.message });
-    return null;
-  });
+  // Wave 3: last event for trend; Wave 6: green streak in parallel
+  const [lastEvent, greenStreak] = await Promise.all([
+    getLastEvent(repository.full_name, 'pull_request').catch(err => {
+      logger.warn('getLastEvent failed', { error: err.message });
+      return null;
+    }),
+    // getGreenStreak returns number of consecutive green pull_request events
+    // from the most recent backward. Falls back to 0 on error.
+    getGreenStreak(repository.full_name, 'pull_request').catch(err => {
+      logger.warn('getGreenStreak failed', { error: err.message });
+      return 0;
+    }),
+  ]);
+
+  // If the current PR is green, the real streak is lastStreak + 1 (this PR).
+  // If it's not green, streak resets to 0 for the comment.
+  const displayStreak = score === 'green' ? greenStreak + 1 : 0;
+
   const trend = calcTrend(energy, lastEvent?.energy_kwh ?? null);
   if (trend) {
     logger.info('PR carbon trend', { repo: repository.full_name, pr: prNumber, trendPct: trend.pct, direction: trend.direction });
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
-  logger.info('PR carbon analysis', { repo: repository.full_name, pr: prNumber, score, energy, numericScore });
+  logger.info('PR carbon analysis', {
+    repo: repository.full_name, pr: prNumber, score, energy, numericScore, greenStreak: displayStreak,
+  });
 
   persistEvent({
     repo:       repository.full_name,
@@ -520,7 +554,6 @@ async function handlePullRequest(payload, token) {
     const scoreLabelColor =
       score === 'green' ? '2da44e' : score === 'yellow' ? 'e3b341' : 'cf222e';
 
-    // Remove stale tier labels
     const staleLabels = ['carbon-green', 'carbon-yellow', 'carbon-red'].filter(l => l !== carbonLabel);
     await Promise.allSettled(
       staleLabels.map(stale =>
@@ -538,10 +571,8 @@ async function handlePullRequest(payload, token) {
       )
     );
 
-    // Remove old numeric score labels
     await cleanStaleScoreLabels(token, owner, repo, prNumber);
 
-    // Add improved label — if trend improved, add carbon-improved label too
     const labelsToAdd = [carbonLabel, 'sustainability-check', scoreLabel];
     const labelMetaExtra = {};
     if (trend?.direction === 'down' && Math.abs(trend.pct) >= 10) {
@@ -549,6 +580,14 @@ async function handlePullRequest(payload, token) {
       labelMetaExtra['carbon-improved'] = {
         color: '0075ca',
         description: 'CarbonFlow AI — carbon impact improved vs last PR',
+      };
+    }
+    // Wave 6: add streak milestone label when streak ≥ 5
+    if (displayStreak >= 5) {
+      labelsToAdd.push('carbon-streak');
+      labelMetaExtra['carbon-streak'] = {
+        color: '238636',
+        description: `CarbonFlow AI — ${displayStreak} consecutive green PRs 🔥`,
       };
     }
 
@@ -564,8 +603,8 @@ async function handlePullRequest(payload, token) {
       }
     ).catch(err => logger.error('Failed to add labels', { error: err.message }));
 
-    // Pass lastEvent to comment builder for trend display
-    const comment = buildCarbonComment(score, additions, deletions, energy, numericScore, lastEvent);
+    // Wave 6: pass displayStreak and budget will be auto-calculated inside builder
+    const comment = buildCarbonComment(score, additions, deletions, energy, numericScore, lastEvent, displayStreak);
     await postComment(token, owner, repo, prNumber, comment)
       .catch(err => logger.error('Failed to post comment', { error: err.message }));
   }
@@ -575,6 +614,7 @@ async function handlePullRequest(payload, token) {
     pr: prNumber,
     score,
     numeric_score: numericScore,
+    green_streak: displayStreak,
     energy: parseFloat(energy.toFixed(4)),
     carbon_kg: carbonKg,
     trend: trend ? { pct: trend.pct, direction: trend.direction } : null,
@@ -627,7 +667,7 @@ async function handleWorkflowRun(payload) {
   return {
     action: 'logged',
     workflow: workflow_run.name,
-    durationMin: parseFloat(durationMin.toFixed(1)),
+    durationMin: parseFloat(durationMin.toFixed(2)),
     energy,
     carbonKg,
     score,
@@ -641,9 +681,19 @@ export default async function handler(req, res) {
     return res.status(200).json({
       status: 'healthy',
       service: 'CarbonFlow AI Webhook',
-      version: '3.3.0',
+      version: '4.0.0',
       thresholds: { yellow: CONFIG.thresholdYellow, red: CONFIG.thresholdRed },
-      features: ['rate-limiting', 'email-notifications', 'supabase-persistence', 'numeric-score', 'enhanced-pr-comments', 'pr-trend-comparison'],
+      features: [
+        'rate-limiting',
+        'email-notifications',
+        'supabase-persistence',
+        'numeric-score',
+        'enhanced-pr-comments',
+        'pr-trend-comparison',
+        'green-streak',          // Wave 6
+        'carbon-budget-hint',    // Wave 6
+        'streak-milestone-label',// Wave 6
+      ],
       timestamp: new Date().toISOString(),
     });
   }
@@ -710,7 +760,7 @@ export default async function handler(req, res) {
     result,
     meta: {
       service: 'CarbonFlow AI Tracker',
-      version: '3.3.0',
+      version: '4.0.0',
       timestamp: new Date().toISOString(),
     },
   });

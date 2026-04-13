@@ -656,7 +656,7 @@ async function loadDashboard() {
         const ago = timeAgo(new Date(e.timestamp));
         const dotColor = e.tier === 'green' ? '#3fb950' : e.tier === 'yellow' ? '#d29922' : '#f85149';
         return `<div class="event-row">
-          <span class="event-badge ${e.event}">${e.event === 'pull_request' ? 'PR' : e.event}</span>
+                    <span class="event-badge ${e.event_type}">${e.event_type === 'pull_request' ? 'PR' : e.event_type}</span>
           <div class="event-meta">
             <div class="event-repo">${e.repo}</div>
             <div class="event-time">${ago}</div>
@@ -676,7 +676,7 @@ async function loadDashboard() {
       repoList.innerHTML = sorted.map(r => {
         const tier = r.avg_kwh < 0.5 ? 'green' : r.avg_kwh < 1.0 ? 'yellow' : 'red';
         return `<div class="repo-row">
-          <span class="repo-name">${r.name}</span>
+          <span class="repo-name">${r.repo}</span>
           <span class="repo-stat">${r.count} runs</span>
           <span class="repo-stat">${r.avg_kwh.toFixed(5)} kWh avg</span>
           <span class="tier-dot ${tier}"></span>

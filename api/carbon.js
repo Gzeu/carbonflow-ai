@@ -8,23 +8,14 @@
  *   deletions                  {number}  lines deleted
  *   workflow_duration_minutes  {number?} CI/CD runtime
  *   files_changed              {number?} number of files modified
- *
- * Response:
- *   energy_kwh     {number}  estimated energy consumption
- *   carbon_kg      {number}  estimated CO₂ equivalent (kg)
- *   carbon_score   {string}  'green' | 'yellow' | 'red'
- *   breakdown      {object}  per-source breakdown
- *   recommendations {string[]} actionable suggestions
  */
 import { z } from 'zod';
 
-// ---------- constants ----------
-const KWH_PER_LINE_ADD  = 0.0000012;   // energy cost per added line
-const KWH_PER_LINE_DEL  = 0.00000008;  // deletions cost less
-const KWH_PER_CI_MINUTE = 0.000075;    // average CI server energy/min
-const KG_CO2_PER_KWH    = 0.233;       // EU average grid intensity (kg/kWh)
+const KWH_PER_LINE_ADD  = 0.0000012;
+const KWH_PER_LINE_DEL  = 0.00000008;
+const KWH_PER_CI_MINUTE = 0.000075;
+const KG_CO2_PER_KWH    = 0.233;
 
-// ---------- Zod schema ----------
 const BodySchema = z.object({
   additions:                 z.number().int().nonnegative().default(0),
   deletions:                 z.number().int().nonnegative().default(0),
@@ -32,7 +23,6 @@ const BodySchema = z.object({
   files_changed:             z.number().int().nonneg().optional(),
 });
 
-// ---------- helpers ----------
 function getTier(kwh, yellow, red) {
   if (kwh < yellow) return 'green';
   if (kwh < red)    return 'yellow';
@@ -56,24 +46,33 @@ function buildRecommendations(tier, breakdown) {
   return recs.length ? recs : ['No specific recommendations — this change looks efficient.'];
 }
 
-// ---------- handler ----------
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
 
-  // parse body
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // Return 405 BEFORE touching req.body — prevents crash on GET
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      error: 'Method not allowed',
+      hint: 'Send POST with JSON body: { additions, deletions, workflow_duration_minutes?, files_changed? }'
+    });
+  }
+
+  // Safe body parse — req.body may be undefined if Content-Type is missing
   let raw;
   try {
-    raw = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    if (req.body === undefined || req.body === null) {
+      raw = {};
+    } else {
+      raw = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    }
   } catch {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
 
-  // validate
   const parsed = BodySchema.safeParse(raw);
   if (!parsed.success) {
     return res.status(422).json({
@@ -87,31 +86,30 @@ export default async function handler(req, res) {
   const yellowThreshold = parseFloat(process.env.CARBON_THRESHOLD_YELLOW || '0.5');
   const redThreshold    = parseFloat(process.env.CARBON_THRESHOLD_RED    || '1.0');
 
-  // calculate
-  const code_kwh = (additions * KWH_PER_LINE_ADD) + (deletions * KWH_PER_LINE_DEL);
-  const ci_kwh   = workflow_duration_minutes ? workflow_duration_minutes * KWH_PER_CI_MINUTE : 0;
+  const code_kwh  = (additions * KWH_PER_LINE_ADD) + (deletions * KWH_PER_LINE_DEL);
+  const ci_kwh    = workflow_duration_minutes ? workflow_duration_minutes * KWH_PER_CI_MINUTE : 0;
   const total_kwh = code_kwh + ci_kwh;
   const carbon_kg = total_kwh * KG_CO2_PER_KWH;
 
   const tier = getTier(total_kwh, yellowThreshold, redThreshold);
   const breakdown = {
-    code_kwh:   parseFloat(code_kwh.toFixed(6)),
-    ci_kwh:     parseFloat(ci_kwh.toFixed(6)),
-    lines_net:  additions - deletions,
+    code_kwh:      parseFloat(code_kwh.toFixed(6)),
+    ci_kwh:        parseFloat(ci_kwh.toFixed(6)),
+    lines_net:     additions - deletions,
     files_changed: files_changed || null,
   };
 
   return res.status(200).json({
-    energy_kwh:      parseFloat(total_kwh.toFixed(6)),
-    carbon_kg:       parseFloat(carbon_kg.toFixed(6)),
-    carbon_score:    tier,
+    energy_kwh:       parseFloat(total_kwh.toFixed(6)),
+    carbon_kg:        parseFloat(carbon_kg.toFixed(6)),
+    carbon_score:     tier,
     breakdown,
-    recommendations: buildRecommendations(tier, breakdown),
-    thresholds: { yellow: yellowThreshold, red: redThreshold },
+    recommendations:  buildRecommendations(tier, breakdown),
+    thresholds:       { yellow: yellowThreshold, red: redThreshold },
     meta: {
-      model_version: '1.0',
+      model_version:             '1.0',
       grid_intensity_kg_per_kwh: KG_CO2_PER_KWH,
-      timestamp: new Date().toISOString(),
+      timestamp:                 new Date().toISOString(),
     },
   });
 }

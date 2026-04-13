@@ -1,238 +1,732 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌱 CarbonFlow AI - Carbon Credit Trading Platform</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-        
-        .container {
-            text-align: center;
-            max-width: 800px;
-            padding: 2rem;
-        }
-        
-        .logo {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-        
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            background: linear-gradient(45deg, #00ff88, #00ccff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .subtitle {
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-            opacity: 0.9;
-        }
-        
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
-        }
-        
-        .feature {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 1.5rem;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .feature-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .status {
-            background: rgba(0, 255, 136, 0.2);
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            padding: 1rem;
-            border-radius: 10px;
-            margin: 2rem 0;
-        }
-        
-        .api-test {
-            margin-top: 2rem;
-        }
-        
-        .btn {
-            background: linear-gradient(45deg, #00ff88, #00ccff);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            margin: 0.5rem;
-            transition: transform 0.2s;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .response {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 1rem;
-            border-radius: 8px;
-            margin-top: 1rem;
-            text-align: left;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 2rem;
-            }
-            .features {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CarbonFlow AI — Carbon Intelligence Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@300..700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-mono: 'Geist Mono', 'Fira Code', monospace;
+
+      --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+      --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+      --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+      --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+      --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+      --text-2xl:  clamp(2rem,     1.2rem  + 2.5vw,  3.5rem);
+
+      --space-1:  0.25rem; --space-2:  0.5rem;  --space-3:  0.75rem;
+      --space-4:  1rem;    --space-5:  1.25rem; --space-6:  1.5rem;
+      --space-8:  2rem;    --space-10: 2.5rem;  --space-12: 3rem;
+      --space-16: 4rem;    --space-20: 5rem;
+
+      --radius-sm: 0.375rem; --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;  --radius-xl: 1rem; --radius-full: 9999px;
+      --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    [data-theme="dark"] {
+      --bg:            #0d1117;
+      --surface:       #161b22;
+      --surface-2:     #1c2128;
+      --surface-3:     #21262d;
+      --border:        rgba(255,255,255,0.08);
+      --text:          #e6edf3;
+      --text-muted:    #8b949e;
+      --text-faint:    #484f58;
+      --primary:       #3fb950;
+      --primary-dim:   rgba(63,185,80,0.12);
+      --yellow:        #d29922;
+      --yellow-dim:    rgba(210,153,34,0.12);
+      --red:           #f85149;
+      --red-dim:       rgba(248,81,73,0.12);
+      --blue:          #58a6ff;
+      --shadow-sm:     0 1px 3px rgba(0,0,0,0.4);
+      --shadow-md:     0 4px 16px rgba(0,0,0,0.5);
+      --shadow-lg:     0 12px 40px rgba(0,0,0,0.6);
+    }
+    [data-theme="light"] {
+      --bg:            #f6f8fa;
+      --surface:       #ffffff;
+      --surface-2:     #f6f8fa;
+      --surface-3:     #eaeef2;
+      --border:        rgba(0,0,0,0.10);
+      --text:          #1f2328;
+      --text-muted:    #636c76;
+      --text-faint:    #afb8c1;
+      --primary:       #1a7f37;
+      --primary-dim:   rgba(26,127,55,0.10);
+      --yellow:        #9a6700;
+      --yellow-dim:    rgba(154,103,0,0.10);
+      --red:           #cf222e;
+      --red-dim:       rgba(207,34,46,0.10);
+      --blue:          #0969da;
+      --shadow-sm:     0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md:     0 4px 16px rgba(0,0,0,0.10);
+      --shadow-lg:     0 12px 40px rgba(0,0,0,0.14);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100dvh;
+      transition: background var(--transition), color var(--transition);
+    }
+    img, svg { display: block; }
+    button { cursor: pointer; font: inherit; color: inherit; background: none; border: none; }
+    a, button { transition: color var(--transition), background var(--transition), opacity var(--transition); }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: var(--radius-sm); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+    /* ── Layout ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-3) var(--space-6);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow-sm);
+    }
+    .topbar-left { display: flex; align-items: center; gap: var(--space-3); }
+    .logo-mark {
+      width: 32px; height: 32px;
+      background: var(--primary);
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-mark svg { width: 18px; height: 18px; }
+    .logo-name { font-size: var(--text-sm); font-weight: 600; letter-spacing: -0.01em; }
+    .logo-tag {
+      font-size: var(--text-xs); font-weight: 500;
+      color: var(--primary);
+      background: var(--primary-dim);
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-full);
+    }
+    .topbar-right { display: flex; align-items: center; gap: var(--space-3); }
+    .status-pill {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-xs); color: var(--text-muted);
+      padding: var(--space-1) var(--space-3);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-faint);
+      transition: background 0.3s;
+    }
+    .status-dot.green { background: var(--primary); box-shadow: 0 0 6px var(--primary); }
+    .status-dot.red   { background: var(--red); }
+    .theme-toggle {
+      width: 32px; height: 32px;
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .theme-toggle:hover { color: var(--text); background: var(--surface-2); }
+
+    .page { max-width: 1200px; margin-inline: auto; padding: var(--space-8) var(--space-6); }
+
+    .page-header { margin-bottom: var(--space-8); }
+    .page-title { font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.02em; }
+    .page-sub { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-1); }
+
+    /* ── KPI strip ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-8);
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-5);
+      box-shadow: var(--shadow-sm);
+    }
+    .kpi-label { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--space-2); }
+    .kpi-value { font-size: var(--text-xl); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .kpi-value.green { color: var(--primary); }
+    .kpi-value.yellow { color: var(--yellow); }
+    .kpi-value.red    { color: var(--red); }
+    .kpi-delta { font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-1); }
+
+    /* ── Main grid ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: var(--space-6);
+      align-items: start;
+    }
+    @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-size: var(--text-sm); font-weight: 600; }
+    .card-badge {
+      font-size: var(--text-xs); font-weight: 500;
+      color: var(--text-muted);
+      background: var(--surface-2);
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border);
+    }
+    .card-body { padding: var(--space-5); }
+
+    /* ── Chart ── */
+    .chart-wrap { position: relative; height: 240px; }
+
+    /* ── Gauge ── */
+    .gauge-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      padding: var(--space-4) 0;
+      gap: var(--space-3);
+    }
+    .gauge-svg { width: 160px; height: 100px; overflow: visible; }
+    .gauge-score {
+      font-size: var(--text-xl); font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .gauge-label {
+      font-size: var(--text-xs); color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .score-badge {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm); font-weight: 600;
+      transition: background 0.4s, color 0.4s;
+    }
+    .score-badge.green  { background: var(--primary-dim); color: var(--primary); }
+    .score-badge.yellow { background: var(--yellow-dim);  color: var(--yellow); }
+    .score-badge.red    { background: var(--red-dim);     color: var(--red); }
+
+    /* ── Carbon form ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+    .form-group { display: flex; flex-direction: column; gap: var(--space-1); }
+    .form-group label { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; }
+    .form-group input {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-sm);
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      transition: border-color var(--transition);
+    }
+    .form-group input:focus { outline: none; border-color: var(--primary); }
+    .btn-primary {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-sm); font-weight: 600;
+      transition: opacity var(--transition);
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Recommendations ── */
+    .rec-list { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-4); }
+    .rec-item {
+      display: flex; align-items: flex-start; gap: var(--space-3);
+      padding: var(--space-3);
+      background: var(--surface-2);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      font-size: var(--text-sm);
+    }
+    .rec-icon { flex-shrink: 0; font-size: 1rem; line-height: 1.4; }
+
+    /* ── Health panel ── */
+    .health-rows { display: flex; flex-direction: column; gap: var(--space-2); }
+    .health-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface-2);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      font-size: var(--text-sm);
+    }
+    .health-row-label { color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+    .chip {
+      font-size: var(--text-xs); font-weight: 600;
+      padding: 2px 10px;
+      border-radius: var(--radius-full);
+    }
+    .chip.ok  { background: var(--primary-dim); color: var(--primary); }
+    .chip.err { background: var(--red-dim);     color: var(--red); }
+    .chip.loading { background: var(--surface-3); color: var(--text-muted); }
+
+    /* ── Skeleton ── */
+    @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding: var(--space-8) var(--space-6) var(--space-12);
+      font-size: var(--text-xs);
+      color: var(--text-faint);
+    }
+    .footer a { color: var(--primary); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .page { padding: var(--space-5) var(--space-4); }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .topbar { padding: var(--space-3) var(--space-4); }
+      .logo-tag { display: none; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">🌱</div>
-        <h1>CarbonFlow AI</h1>
-        <p class="subtitle">Revolutionary AI-powered decentralized carbon credit trading platform</p>
-        
-        <div class="status">
-            <h3>🚀 System Status</h3>
-            <p id="status-text">Loading...</p>
-            <div id="deployment-info"></div>
-        </div>
-        
-        <div class="features">
-            <div class="feature">
-                <div class="feature-icon">🤖</div>
-                <h3>AI Verification</h3>
-                <p>Machine learning algorithms verify carbon capture projects using satellite imagery</p>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">⛓️</div>
-                <h3>Blockchain Trading</h3>
-                <p>Decentralized marketplace for carbon credits with smart contract automation</p>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">📊</div>
-                <h3>Real-time Analytics</h3>
-                <p>Live monitoring and analytics for carbon projects and market trends</p>
-            </div>
-        </div>
-        
-        <div class="api-test">
-            <h3>🔧 API Testing</h3>
-            <button class="btn" onclick="testWebhook()">Test Webhook Health</button>
-            <button class="btn" onclick="testCarbonAnalysis()">Test Carbon Analysis</button>
-            <div id="api-response" class="response" style="display: none;"></div>
-        </div>
-        
-        <div style="margin-top: 2rem; opacity: 0.8;">
-            <p><strong>Environment:</strong> <span id="env-info">Production</span></p>
-            <p><strong>Version:</strong> 1.0.0</p>
-            <p><strong>Last Deploy:</strong> <span id="deploy-time"></span></p>
-        </div>
+
+<!-- ── Topbar ── -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo-mark">
+      <svg viewBox="0 0 18 18" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 2C5.7 2 3 4.7 3 8c0 2.5 1.5 4.7 3.7 5.7L9 16l2.3-2.3C13.5 12.7 15 10.5 15 8c0-3.3-2.7-6-6-6z"/>
+        <path d="M9 6v4M7 8h4"/>
+      </svg>
     </div>
-    
-    <script>
-        // Set deployment time
-        document.getElementById('deploy-time').textContent = new Date().toLocaleString();
-        
-        // Test webhook health
-        async function testWebhook() {
-            const responseDiv = document.getElementById('api-response');
-            responseDiv.style.display = 'block';
-            responseDiv.innerHTML = 'Testing webhook health...';
-            
-            try {
-                const response = await fetch('/api/webhooks', {
-                    method: 'GET'
-                });
-                const data = await response.json();
-                
-                responseDiv.innerHTML = `
-                    <strong>✅ Webhook Health Check</strong><br>
-                    Status: ${data.status}<br>
-                    Service: ${data.service}<br>
-                    Timestamp: ${data.timestamp}
-                `;
-                
-                updateStatus('🟢 All systems operational', 'green');
-            } catch (error) {
-                responseDiv.innerHTML = `
-                    <strong>❌ Webhook Test Failed</strong><br>
-                    Error: ${error.message}
-                `;
-                updateStatus('🔴 API endpoint not responding', 'red');
-            }
-        }
-        
-        // Test carbon analysis (mock data)
-        async function testCarbonAnalysis() {
-            const responseDiv = document.getElementById('api-response');
-            responseDiv.style.display = 'block';
-            responseDiv.innerHTML = 'Running carbon analysis simulation...';
-            
-            // Simulate analysis
-            setTimeout(() => {
-                const mockAnalysis = {
-                    energyConsumption: 0.0234,
-                    carbonEmission: 0.0094,
-                    carbonScore: 'green',
-                    recommendations: [
-                        '🟢 Low carbon impact - Great work!',
-                        '♻️ Keep following sustainable coding practices'
-                    ]
-                };
-                
-                responseDiv.innerHTML = `
-                    <strong>🌱 Carbon Analysis Result</strong><br>
-                    Energy Consumption: ${mockAnalysis.energyConsumption} kWh<br>
-                    Carbon Emission: ${mockAnalysis.carbonEmission} kg CO2<br>
-                    Score: <span style="color: ${mockAnalysis.carbonScore === 'green' ? '#00ff88' : '#ff6b6b'}">${mockAnalysis.carbonScore.toUpperCase()}</span><br>
-                    <br><strong>Recommendations:</strong><br>
-                    ${mockAnalysis.recommendations.join('<br>')}
-                `;
-            }, 1500);
-        }
-        
-        function updateStatus(message, color) {
-            const statusText = document.getElementById('status-text');
-            statusText.textContent = message;
-            statusText.style.color = color === 'green' ? '#00ff88' : '#ff6b6b';
-        }
-        
-        // Auto-test on load
-        setTimeout(() => {
-            testWebhook();
-        }, 1000);
-    </script>
+    <span class="logo-name">CarbonFlow AI</span>
+    <span class="logo-tag">v1.0</span>
+  </div>
+  <div class="topbar-right">
+    <div class="status-pill">
+      <span class="status-dot" id="health-dot"></span>
+      <span id="health-label">Checking…</span>
+    </div>
+    <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <a href="https://github.com/Gzeu/carbonflow-ai" target="_blank" rel="noopener" style="color:var(--text-muted);display:flex;align-items:center;" aria-label="GitHub">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58C20.56 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0z"/></svg>
+    </a>
+  </div>
+</header>
+
+<!-- ── Page ── -->
+<main class="page">
+
+  <div class="page-header">
+    <h1 class="page-title">Carbon Intelligence Dashboard</h1>
+    <p class="page-sub">Real-time carbon scoring for your GitHub repositories · powered by CarbonFlow AI</p>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Total Analyses</div>
+      <div class="kpi-value" id="kpi-total" style="color:var(--blue)">—</div>
+      <div class="kpi-delta">session</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Green Commits</div>
+      <div class="kpi-value green" id="kpi-green">—</div>
+      <div class="kpi-delta">&lt; 0.5 kWh</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Yellow Commits</div>
+      <div class="kpi-value yellow" id="kpi-yellow">—</div>
+      <div class="kpi-delta">0.5 – 1.0 kWh</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Red Commits</div>
+      <div class="kpi-value red" id="kpi-red">—</div>
+      <div class="kpi-delta">&gt; 1.0 kWh</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg Energy</div>
+      <div class="kpi-value" id="kpi-avg" style="color:var(--text)">—</div>
+      <div class="kpi-delta">kWh per run</div>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- Left column -->
+    <div style="display:flex;flex-direction:column;gap:var(--space-6)">
+
+      <!-- History chart -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Carbon Score History</span>
+          <span class="card-badge" id="chart-count">0 runs</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Run scorer -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Run Carbon Scorer</span>
+          <span class="card-badge">POST /api/carbon</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="inp-add">Lines Added</label>
+              <input type="number" id="inp-add" placeholder="e.g. 250" min="0" value="" />
+            </div>
+            <div class="form-group">
+              <label for="inp-del">Lines Deleted</label>
+              <input type="number" id="inp-del" placeholder="e.g. 80" min="0" value="" />
+            </div>
+            <div class="form-group">
+              <label for="inp-dur">CI Duration (min)</label>
+              <input type="number" id="inp-dur" placeholder="e.g. 4.5" min="0" step="0.1" value="" />
+            </div>
+            <div class="form-group">
+              <label for="inp-files">Files Changed</label>
+              <input type="number" id="inp-files" placeholder="e.g. 12" min="0" value="" />
+            </div>
+          </div>
+          <button class="btn-primary" id="run-btn" onclick="runScorer()">Calculate Carbon Score</button>
+
+          <!-- Result -->
+          <div id="result-area" style="margin-top:var(--space-5);display:none;">
+            <div class="gauge-wrap">
+              <svg class="gauge-svg" viewBox="0 0 160 100">
+                <path d="M10 90 A70 70 0 0 1 150 90" fill="none" stroke="var(--surface-3)" stroke-width="12" stroke-linecap="round"/>
+                <path id="gauge-arc" d="M10 90 A70 70 0 0 1 150 90" fill="none" stroke="var(--primary)" stroke-width="12" stroke-linecap="round"
+                  stroke-dasharray="220" stroke-dashoffset="220" style="transition:stroke-dashoffset 0.8s cubic-bezier(0.16,1,0.3,1),stroke 0.4s"/>
+              </svg>
+              <div class="gauge-score" id="gauge-score">0.00</div>
+              <div class="gauge-label">kWh estimated</div>
+              <div class="score-badge green" id="score-badge">● GREEN</div>
+            </div>
+
+            <div class="rec-list" id="rec-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column -->
+    <div style="display:flex;flex-direction:column;gap:var(--space-6)">
+
+      <!-- Health check -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">System Health</span>
+          <button onclick="loadHealth()" style="font-size:var(--text-xs);color:var(--primary);font-weight:600;">Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="health-rows" id="health-rows">
+            <div class="health-row"><span class="health-row-label">API</span><span class="chip loading">…</span></div>
+            <div class="health-row"><span class="health-row-label">Webhook Secret</span><span class="chip loading">…</span></div>
+            <div class="health-row"><span class="health-row-label">GitHub App ID</span><span class="chip loading">…</span></div>
+            <div class="health-row"><span class="health-row-label">Private Key</span><span class="chip loading">…</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Score distribution doughnut -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Score Distribution</span>
+          <span class="card-badge">session</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrap" style="height:200px;"><canvas id="distChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Thresholds info -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Thresholds</span></div>
+        <div class="card-body">
+          <div class="health-rows">
+            <div class="health-row">
+              <span style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);"><span style="width:10px;height:10px;border-radius:50%;background:var(--primary);display:inline-block;"></span>Green</span>
+              <span style="font-size:var(--text-xs);color:var(--text-muted);font-variant-numeric:tabular-nums;">&lt; 0.5 kWh</span>
+            </div>
+            <div class="health-row">
+              <span style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);"><span style="width:10px;height:10px;border-radius:50%;background:var(--yellow);display:inline-block;"></span>Yellow</span>
+              <span style="font-size:var(--text-xs);color:var(--text-muted);font-variant-numeric:tabular-nums;">0.5 – 1.0 kWh</span>
+            </div>
+            <div class="health-row">
+              <span style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);"><span style="width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block;"></span>Red</span>
+              <span style="font-size:var(--text-xs);color:var(--text-muted);font-variant-numeric:tabular-nums;">&gt; 1.0 kWh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  CarbonFlow AI &nbsp;·&nbsp;
+  <a href="https://github.com/Gzeu/carbonflow-ai" target="_blank" rel="noopener">GitHub</a> &nbsp;·&nbsp;
+  <a href="https://github.com/apps/carbonflow-ai-tracker" target="_blank" rel="noopener">Install App</a> &nbsp;·&nbsp;
+  Vercel Serverless · Node 20 · ESModules
+</footer>
+
+<script>
+  // ── Theme toggle ──
+  (function(){
+    const t = document.querySelector('[data-theme-toggle]');
+    const r = document.documentElement;
+    let d = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    r.setAttribute('data-theme', d);
+    function setIcon(){
+      t.innerHTML = d === 'dark'
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    }
+    setIcon();
+    if(t) t.addEventListener('click', ()=>{ d = d==='dark'?'light':'dark'; r.setAttribute('data-theme',d); setIcon(); });
+  })();
+
+  // ── Session state ──
+  const state = { runs: [], green: 0, yellow: 0, red: 0 };
+
+  // ── Chart.js defaults ──
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+
+  // History line chart
+  const histCtx = document.getElementById('historyChart').getContext('2d');
+  const histChart = new Chart(histCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'kWh',
+        data: [],
+        borderColor: '#3fb950',
+        backgroundColor: 'rgba(63,185,80,0.08)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#3fb950',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(4)} kWh` } } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: v => v.toFixed(3) } }
+      }
+    }
+  });
+
+  // Distribution doughnut
+  const distCtx = document.getElementById('distChart').getContext('2d');
+  const distChart = new Chart(distCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Green', 'Yellow', 'Red'],
+      datasets: [{ data: [0, 0, 0], backgroundColor: ['#3fb950','#d29922','#f85149'], borderWidth: 0, hoverOffset: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 16, boxWidth: 12, font: { size: 12 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` } }
+      },
+      cutout: '65%'
+    }
+  });
+
+  function updateCharts(energy, tier) {
+    const idx = state.runs.length;
+    state.runs.push(energy);
+    if (tier === 'green')  state.green++;
+    if (tier === 'yellow') state.yellow++;
+    if (tier === 'red')    state.red++;
+
+    histChart.data.labels.push(`#${idx + 1}`);
+    histChart.data.datasets[0].data.push(energy);
+    // colour last point per tier
+    const colours = state.runs.map((_, i) => {
+      const t2 = histChart.data.datasets[0].data[i];
+      return t2 < 0.5 ? '#3fb950' : t2 < 1.0 ? '#d29922' : '#f85149';
+    });
+    histChart.data.datasets[0].pointBackgroundColor = colours;
+    histChart.data.datasets[0].borderColor = tier === 'green' ? '#3fb950' : tier === 'yellow' ? '#d29922' : '#f85149';
+    histChart.update();
+
+    distChart.data.datasets[0].data = [state.green, state.yellow, state.red];
+    distChart.update();
+
+    document.getElementById('chart-count').textContent = `${state.runs.length} run${state.runs.length !== 1 ? 's' : ''}`;
+    document.getElementById('kpi-total').textContent  = state.runs.length;
+    document.getElementById('kpi-green').textContent  = state.green;
+    document.getElementById('kpi-yellow').textContent = state.yellow;
+    document.getElementById('kpi-red').textContent    = state.red;
+    const avg = state.runs.reduce((a, b) => a + b, 0) / state.runs.length;
+    document.getElementById('kpi-avg').textContent    = avg.toFixed(4);
+  }
+
+  // ── Gauge animation ──
+  function animateGauge(energy) {
+    const arc = document.getElementById('gauge-arc');
+    const scoreEl = document.getElementById('gauge-score');
+    const badgeEl = document.getElementById('score-badge');
+    const totalDash = 220;
+    // max scale = 2 kWh
+    const fraction = Math.min(energy / 2, 1);
+    const offset = totalDash - fraction * totalDash;
+    const tier = energy < 0.5 ? 'green' : energy < 1.0 ? 'yellow' : 'red';
+    const colour = tier === 'green' ? '#3fb950' : tier === 'yellow' ? '#d29922' : '#f85149';
+    arc.style.stroke = colour;
+    arc.style.strokeDashoffset = offset;
+    scoreEl.textContent = energy.toFixed(4);
+    badgeEl.className = `score-badge ${tier}`;
+    badgeEl.textContent = `● ${tier.toUpperCase()}`;
+  }
+
+  // ── Run scorer ──
+  async function runScorer() {
+    const btn = document.getElementById('run-btn');
+    const add   = parseInt(document.getElementById('inp-add').value)   || 0;
+    const del   = parseInt(document.getElementById('inp-del').value)   || 0;
+    const dur   = parseFloat(document.getElementById('inp-dur').value) || 0;
+    const files = parseInt(document.getElementById('inp-files').value) || 0;
+
+    if (add === 0 && del === 0) {
+      document.getElementById('inp-add').focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Calculating…';
+
+    try {
+      const body = { additions: add, deletions: del };
+      if (dur  > 0) body.workflow_duration_minutes = dur;
+      if (files > 0) body.files_changed = files;
+
+      const res = await fetch('/api/carbon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'API error');
+
+      const energy = data.energy_kwh;
+      const tier   = data.carbon_score;
+      const recs   = data.recommendations || [];
+
+      document.getElementById('result-area').style.display = 'block';
+      animateGauge(energy);
+      updateCharts(energy, tier);
+
+      const recList = document.getElementById('rec-list');
+      recList.innerHTML = recs.map(r => `<div class="rec-item"><span class="rec-icon">${r.startsWith('🟢')||r.startsWith('✅') ? '🌿' : r.startsWith('⚡') ? '⚡' : '💡'}</span><span>${r}</span></div>`).join('');
+
+    } catch(err) {
+      document.getElementById('result-area').style.display = 'block';
+      document.getElementById('rec-list').innerHTML = `<div class="rec-item" style="color:var(--red);"><span class="rec-icon">⚠️</span><span>${err.message}</span></div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Calculate Carbon Score';
+    }
+  }
+
+  // ── Health check ──
+  async function loadHealth() {
+    const dot   = document.getElementById('health-dot');
+    const label = document.getElementById('health-label');
+    const rows  = document.getElementById('health-rows');
+
+    dot.className = 'status-dot';
+    label.textContent = 'Checking…';
+    rows.innerHTML = ['API','Webhook Secret','GitHub App ID','Private Key']
+      .map(n => `<div class="health-row"><span class="health-row-label">${n}</span><span class="chip loading">…</span></div>`).join('');
+
+    try {
+      const res  = await fetch('/api/health');
+      const data = await res.json();
+
+      const checks = [
+        { label: 'API',            ok: data.status === 'ok' },
+        { label: 'Webhook Secret', ok: data.checks?.WEBHOOK_SECRET },
+        { label: 'GitHub App ID',  ok: data.checks?.GITHUB_APP_ID },
+        { label: 'Private Key',    ok: data.checks?.GITHUB_PRIVATE_KEY },
+      ];
+
+      rows.innerHTML = checks.map(c => `
+        <div class="health-row">
+          <span class="health-row-label">${c.label}</span>
+          <span class="chip ${c.ok ? 'ok' : 'err'}">${c.ok ? 'OK' : 'MISSING'}</span>
+        </div>`).join('');
+
+      const allOk = checks.every(c => c.ok);
+      dot.className   = `status-dot ${allOk ? 'green' : 'red'}`;
+      label.textContent = allOk ? 'All systems operational' : 'Config issues detected';
+
+    } catch(err) {
+      rows.innerHTML = `<div class="health-row"><span class="health-row-label">API</span><span class="chip err">OFFLINE</span></div>`;
+      dot.className   = 'status-dot red';
+      label.textContent = 'API unreachable';
+    }
+  }
+
+  // enter key on inputs
+  document.querySelectorAll('.form-group input').forEach(inp => {
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') runScorer(); });
+  });
+
+  // Auto-load health on page open
+  loadHealth();
+</script>
 </body>
 </html>

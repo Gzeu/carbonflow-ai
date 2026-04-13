@@ -13,8 +13,16 @@
       "dest": "/api/webhooks.js"
     },
     {
-      "src": "/health",
-      "dest": "/api/webhooks.js"
+      "src": "/api/health",
+      "dest": "/api/health.js"
+    },
+    {
+      "src": "/api/carbon",
+      "dest": "/api/carbon.js"
+    },
+    {
+      "src": "/api/repos",
+      "dest": "/api/repos.js"
     },
     {
       "src": "/(.*)",
@@ -27,8 +35,9 @@
     "GITHUB_PRIVATE_KEY": "@github-private-key"
   },
   "functions": {
-    "api/webhooks.js": {
-      "maxDuration": 30
-    }
+    "api/webhooks.js": { "maxDuration": 30 },
+    "api/health.js":   { "maxDuration": 10 },
+    "api/carbon.js":   { "maxDuration": 10 },
+    "api/repos.js":    { "maxDuration": 10 }
   }
 }

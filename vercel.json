@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "installCommand": "npm install",
+  "buildCommand": "",
+  "framework": null,
   "functions": {
     "api/webhooks.js":  { "maxDuration": 30 },
     "api/carbon.js":    { "maxDuration": 15 },
